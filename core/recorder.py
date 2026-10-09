@@ -2,9 +2,9 @@ import os
 import shutil
 import subprocess
 import signal
+import json
 import pygame
 from datetime import datetime
-
 
 class VideoRecorder:
     def __init__(self, width, height, fps=60):
@@ -18,9 +18,50 @@ class VideoRecorder:
         os.makedirs(self.folder, exist_ok=True)
         self.start()
 
+    def _get_hyprland_geometry(self):
+        try:
+            out = subprocess.check_output(["hyprctl", "activewindow", "-j"], text=True)
+            data = json.loads(out)
+            at = data.get("at", [0, 0])
+            size = data.get("size", [self.width, self.height])
+            return f"{at[0]},{at[1]} {size[0]}x{size[1]}"
+        except Exception:
+            return None
+
     def start(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filepath = os.path.join(self.folder, f"gameplay_{timestamp}.mp4")
+
+        is_hyprland = bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"))
+        is_wayland = bool(os.environ.get("WAYLAND_DISPLAY") or is_hyprland)
+
+        if is_wayland and shutil.which("wl-screenrec"):
+            cmd = ["wl-screenrec", "-f", filepath]
+            if is_hyprland:
+                geo = self._get_hyprland_geometry()
+                if geo:
+                    cmd.extend(["-g", geo])
+            try:
+                self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.is_recording = True
+                self.is_external = True
+                return
+            except Exception:
+                self.proc = None
+
+        if is_wayland and shutil.which("wf-recorder"):
+            cmd = ["wf-recorder", "-f", filepath]
+            if is_hyprland:
+                geo = self._get_hyprland_geometry()
+                if geo:
+                    cmd.extend(["-g", geo])
+            try:
+                self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.is_recording = True
+                self.is_external = True
+                return
+            except Exception:
+                self.proc = None
 
         if shutil.which("ffmpeg"):
             cmd = [
@@ -51,41 +92,12 @@ class VideoRecorder:
             except Exception:
                 self.proc = None
 
-        is_wayland = bool(
-            os.environ.get("WAYLAND_DISPLAY") or
-            os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
-        )
-
-        if is_wayland and shutil.which("wf-recorder"):
-            try:
-                self.proc = subprocess.Popen(
-                    ["wf-recorder", "-f", filepath],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                self.is_recording = True
-                self.is_external = True
-                return
-            except Exception:
-                self.proc = None
-
-        if is_wayland and shutil.which("wl-screenrec"):
-            try:
-                self.proc = subprocess.Popen(
-                    ["wl-screenrec", "-f", filepath],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                self.is_recording = True
-                self.is_external = True
-                return
-            except Exception:
-                self.proc = None
-
     def record_frame(self, surf):
         if not self.is_recording or self.is_external:
             return
         try:
+            if surf.get_size() != (self.width, self.height):
+                surf = pygame.transform.scale(surf, (self.width, self.height))
             if hasattr(pygame.image, "tobytes"):
                 raw = pygame.image.tobytes(surf, "RGBA")
             else:
