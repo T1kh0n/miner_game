@@ -14,7 +14,6 @@ from engine.ui import UIButton, UILabel, UIPanel, UINode
 from core.camera import Camera
 from states.state_machine import State
 
-
 class PlayState(State):
     def __init__(self, manager):
         super().__init__(manager)
@@ -31,6 +30,7 @@ class PlayState(State):
         self.light_coin = self._make_light_mask(24)
 
         self.camera = Camera(self.world_w, self.world_h)
+        self._coin_ticks = 0
         self._setup_end_panels()
 
     def _setup_end_panels(self):
@@ -86,6 +86,7 @@ class PlayState(State):
         self.game_won = False
         self.paused = False
         self.recorded_score = False
+        self._coin_ticks = 0
 
         self.panel_over.visible = False
         self.panel_won.visible = False
@@ -196,6 +197,8 @@ class PlayState(State):
         if self.game_over or self.game_won or self.paused:
             return
 
+        self._coin_ticks += int(dt * 1000)
+
         keys = pygame.key.get_pressed()
         up = self._is_key(keys, pygame.K_UP, 1094) or self._is_key(keys, pygame.K_w, 1094)
         down = self._is_key(keys, pygame.K_DOWN, 1099) or self._is_key(keys, pygame.K_s, 1099)
@@ -211,10 +214,10 @@ class PlayState(State):
             hw = self.player.w / 2
             hh = self.player.h / 2
 
-            if jump and self.player.on_ground:
-                above_x = int(px // TILE_SIZE)
+            if (jump and self.player.on_ground) or (self.player.body.velocity.y < -30.0):
                 above_y = int((py - hh - 2) // TILE_SIZE)
-                self._dig_tile(above_x, above_y)
+                for test_x in [int((px - hw + 2) // TILE_SIZE), int((px + hw - 2) // TILE_SIZE)]:
+                    self._dig_tile(test_x, above_y)
 
             if up or down or left or right:
                 dig_x, dig_y = -1, -1
@@ -268,10 +271,13 @@ class PlayState(State):
                         self.recorded_score = True
 
     def render(self, surface):
-        cam_x, cam_y = self.camera.update(
-            self.player.body.position.x, self.player.body.position.y,
-            self.player.facing_right, self.player.body.velocity.y > 0
-        )
+        if not self.paused:
+            cam_x, cam_y = self.camera.update(
+                self.player.body.position.x, self.player.body.position.y,
+                self.player.facing_right, self.player.body.velocity.y > 0
+            )
+        else:
+            cam_x, cam_y = self.camera.x, self.camera.y
         cam_x, cam_y = int(cam_x), int(cam_y)
 
         depth_ratio = min(1.0, (self.player.body.position.y / self.world_h) * 2.5)
@@ -288,7 +294,7 @@ class PlayState(State):
         end_row = min(GRID_H, int((cam_y + CANVAS_H - PANEL_HEIGHT) // TILE_SIZE) + 2)
 
         coin_sprites = AssetManager.get().get_sprite("coin")
-        coin_frame = coin_sprites[(pygame.time.get_ticks() // 80) % len(coin_sprites)]
+        coin_frame = coin_sprites[(self._coin_ticks // 80) % len(coin_sprites)]
 
         for y in range(start_row, end_row):
             for x in range(start_col, end_col):
@@ -331,7 +337,6 @@ class PlayState(State):
         self.root.render(surface)
 
     def _render_panel(self, surface):
-        self.panel_surface.fill((28, 32, 44))
         for py in range(PANEL_HEIGHT):
             pt = py / PANEL_HEIGHT
             pygame.draw.line(
@@ -343,27 +348,31 @@ class PlayState(State):
         pygame.draw.line(self.panel_surface, PAL_OUTLINE, (0, PANEL_HEIGHT - 1), (CANVAS_W, PANEL_HEIGHT - 1), 1)
 
         score_surf = self.font.render(f"СЧЁТ: {self.score}", True, COLOR_GOLD)
-        self.panel_surface.blit(score_surf, (6, 4))
+        self.panel_surface.blit(score_surf, (8, 4))
 
         depth_surf = self.font.render(f"ГЛУБИНА: {int(self.player.body.position.y // TILE_SIZE)}м", True, COLOR_TEXT)
-        self.panel_surface.blit(depth_surf, (6, 18))
+        self.panel_surface.blit(depth_surf, (8, 17))
 
-        bar_x = CANVAS_W - 80
+        bar_x = 252
+        bar_w = 60
+
         hp_label = self.font.render("HP", True, COLOR_TEXT)
-        self.panel_surface.blit(hp_label, (bar_x - hp_label.get_width() - 3, 4))
-        pygame.draw.rect(self.panel_surface, (100, 20, 20), (bar_x, 5, 70, 8))
-        pygame.draw.rect(self.panel_surface, (250, 40, 40), (bar_x, 5, int(70 * self.player.health / 100.0), 8))
-        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 5, 70, 8), 1)
+        self.panel_surface.blit(hp_label, (bar_x - hp_label.get_width() - 4, 4))
+        pygame.draw.rect(self.panel_surface, (100, 20, 20), (bar_x, 5, bar_w, 8))
+        pygame.draw.rect(self.panel_surface, (250, 40, 40), (bar_x, 5, int(bar_w * max(0.0, self.player.health / 100.0)), 8))
+        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 5, bar_w, 8), 1)
 
         st_label = self.font.render("ST", True, COLOR_TEXT)
-        self.panel_surface.blit(st_label, (bar_x - st_label.get_width() - 3, 18))
-        pygame.draw.rect(self.panel_surface, (20, 80, 20), (bar_x, 19, 70, 8))
-        pygame.draw.rect(self.panel_surface, (40, 200, 40), (bar_x, 19, int(70 * self.player.stamina / 100.0), 8))
-        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 19, 70, 8), 1)
+        self.panel_surface.blit(st_label, (bar_x - st_label.get_width() - 4, 17))
+        pygame.draw.rect(self.panel_surface, (20, 80, 20), (bar_x, 18, bar_w, 8))
+        pygame.draw.rect(self.panel_surface, (40, 200, 40), (bar_x, 18, int(bar_w * max(0.0, self.player.stamina / 100.0)), 8))
+        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 18, bar_w, 8), 1)
 
+        rec_dot_x = 158
+        rec_dot_y = 15
         if (pygame.time.get_ticks() // 500) % 2 == 0:
-            pygame.draw.circle(self.panel_surface, (255, 60, 60), (CANVAS_W // 2 + 2, PANEL_HEIGHT // 2), 3)
+            pygame.draw.circle(self.panel_surface, (255, 60, 60), (rec_dot_x, rec_dot_y), 3)
         rec_surf = self.font.render("REC", True, (255, 100, 100))
-        self.panel_surface.blit(rec_surf, (CANVAS_W // 2 + 8, PANEL_HEIGHT // 2 - rec_surf.get_height() // 2))
+        self.panel_surface.blit(rec_surf, (rec_dot_x + 6, rec_dot_y - rec_surf.get_height() // 2))
 
         surface.blit(self.panel_surface, (0, 0))
