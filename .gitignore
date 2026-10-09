@@ -8,3 +8,13 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Shell scripts
+*.sh
+
+# Recordings directory
+/recordings
+
+# Generated assets
+assets/spritesheets/
+assets/data/
