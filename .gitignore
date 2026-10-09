@@ -14,7 +14,4 @@ wheels/
 
 # Recordings directory
 /recordings
-
-# Generated assets
-assets/spritesheets/
-assets/data/
+recordings/
