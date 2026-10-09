@@ -1,5 +1,6 @@
 import math
 import random
+import os
 
 def g(f, p):
     with open(f, 'w') as x:
@@ -47,8 +48,9 @@ def rb(s):
         p.append((math.cos(a)*0.45, y, math.sin(a)*0.45))
     return p
 
-g("wall.obj", cb(40, 1.0))
-g("dirt.obj", cb(15, 0.8))
-g("rock.obj", sp(250, 0.4))
-g("coin.obj", gm(180))
-g("player.obj", rb(300))
+os.makedirs("assets/models", exist_ok=True)
+g("assets/models/wall.obj", cb(40, 1.0))
+g("assets/models/dirt.obj", cb(15, 0.8))
+g("assets/models/rock.obj", sp(250, 0.4))
+g("assets/models/coin.obj", gm(180))
+g("assets/models/player.obj", rb(300))
