@@ -121,17 +121,13 @@ class PlayState(State):
                     data["camera"].add_shake(8.0, 20)
                     data["emit"](p.body.position.x, p.body.position.y, [(255, 60, 60), (255, 180, 40)], 25)
 
-        h1 = self.space.add_collision_handler(3, 2)
-        h1.post_solve = post_solve_crush
-        h1.data["player"] = self.player
-        h1.data["camera"] = self.camera
-        h1.data["emit"] = self.emit_particles
-
-        h2 = self.space.add_collision_handler(3, 1)
-        h2.post_solve = post_solve_crush
-        h2.data["player"] = self.player
-        h2.data["camera"] = self.camera
-        h2.data["emit"] = self.emit_particles
+        collision_data = {
+            "player": self.player,
+            "camera": self.camera,
+            "emit": self.emit_particles
+        }
+        self.space.on_collision(3, 2, post_solve=post_solve_crush, data=collision_data)
+        self.space.on_collision(3, 1, post_solve=post_solve_crush, data=collision_data)
 
     def add_static_tile(self, tx, ty):
         shape = pymunk.Poly(self.space.static_body, [
