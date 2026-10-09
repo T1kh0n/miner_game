@@ -4,6 +4,7 @@ import math
 from core.config import TILE_SIZE
 from engine.asset_manager import AssetManager
 
+
 class Particle:
     def __init__(self, x, y, vx, vy, color, life, size=2):
         self.x = x
@@ -27,6 +28,7 @@ class Particle:
             pygame.draw.circle(ps, (*self.color, alpha), (self.size, self.size), self.size)
             surf.blit(ps, (int(self.x - cam_x) - self.size, int(self.y - cam_y) - self.size))
 
+
 class RockEntity:
     def __init__(self, tx, ty, space):
         self.radius = 9.0
@@ -49,15 +51,26 @@ class RockEntity:
         rect = rotated.get_rect(center=(rx, ry))
         surface.blit(rotated, rect)
 
-PLAYER_W = 12
-PLAYER_H = 17
-_PLAYER_SPRITE_CY = 13
+
+def _compute_hitbox(skin_id):
+    mgr = AssetManager.get()
+    sprite = mgr.get_sprite(f"player_{skin_id}", "idle_0")
+    mask = pygame.mask.from_surface(sprite)
+    rects = mask.get_bounding_rects()
+    if rects:
+        union = rects[0].unionall(rects[1:])
+        return union.width, union.height
+    return sprite.get_width(), sprite.get_height()
+
 
 class Player:
     def __init__(self, x, y, skin_id, space):
         self.skin_id = skin_id
-        self.w = PLAYER_W
-        self.h = PLAYER_H
+
+        bw, bh = _compute_hitbox(skin_id)
+        self.w = max(8, bw)
+        self.h = max(10, bh)
+        self._sprite_cy = self.h // 2
 
         self.is_dead = False
         self.death_reason = ""
@@ -83,19 +96,32 @@ class Player:
         space.add(self.body, self.shape)
 
     def update(self, up, down, left, right, jump, dt, space, particle_emitter, camera):
-        if self.is_dead: return
+        if self.is_dead:
+            return
 
         self.on_ground = False
         self.on_wall_l = False
         self.on_wall_r = False
+
+        half_w = self.w / 2
+        half_h = self.h / 2
+        ground_thresh = half_h - 1
+        wall_thresh = half_w - 1
+
         for info in space.shape_query(self.shape):
-            if info.shape != self.shape and not getattr(info.shape, 'sensor', False):
-                for cp in info.contact_point_set.points:
-                    dy = cp.point_a.y - self.body.position.y
-                    dx = cp.point_a.x - self.body.position.x
-                    if dy > self.h / 2 - 2: self.on_ground = True
-                    if dx > self.w / 2 - 2: self.on_wall_r = True
-                    if dx < -self.w / 2 + 2: self.on_wall_l = True
+            if info.shape == self.shape:
+                continue
+            if getattr(info.shape, 'sensor', False):
+                continue
+            for cp in info.contact_point_set.points:
+                dy = cp.point_a.y - self.body.position.y
+                dx = cp.point_a.x - self.body.position.x
+                if dy > ground_thresh:
+                    self.on_ground = True
+                if dx > wall_thresh:
+                    self.on_wall_r = True
+                if dx < -wall_thresh:
+                    self.on_wall_l = True
 
         if self.on_ground:
             self.stamina = min(100.0, self.stamina + 40 * dt)
@@ -109,27 +135,34 @@ class Player:
                     particle_emitter(self.body.position.x, self.body.position.y, [(255, 60, 60)], 25)
 
         move_axis = 0.0
-        if left: move_axis -= 1.0
-        if right: move_axis += 1.0
+        if left:
+            move_axis -= 1.0
+        if right:
+            move_axis += 1.0
 
-        if move_axis > 0: self.facing_right = True
-        elif move_axis < 0: self.facing_right = False
+        if move_axis > 0:
+            self.facing_right = True
+        elif move_axis < 0:
+            self.facing_right = False
 
         target_vx = move_axis * 110.0
         current_vx = self.body.velocity.x
-        self.body.velocity = (current_vx + (target_vx - current_vx) * (0.2 if self.on_ground else 0.1), self.body.velocity.y)
+        accel = 0.2 if self.on_ground else 0.1
+        self.body.velocity = (
+            current_vx + (target_vx - current_vx) * accel,
+            self.body.velocity.y
+        )
 
         if jump and self.on_ground:
             self.body.velocity = (self.body.velocity.x, -170.0)
-            particle_emitter(self.body.position.x, self.body.position.y + self.h/2, [(220, 225, 235)], 4)
+            particle_emitter(self.body.position.x, self.body.position.y + half_h, [(220, 225, 235)], 4)
 
-        if (self.on_wall_l and left) or (self.on_wall_r and right):
+        on_wall = (self.on_wall_l and left) or (self.on_wall_r and right)
+        if on_wall and not self.on_ground:
             if up and self.stamina > 0:
                 self.body.velocity = (self.body.velocity.x, -80.0)
-                self.stamina -= 25 * dt
-                if self.stamina <= 0:
-                    self.stamina = 0
-            elif not self.on_ground and self.body.velocity.y > 0:
+                self.stamina = max(0.0, self.stamina - 30.0 * dt)
+            elif self.body.velocity.y > 0:
                 self.body.velocity = (self.body.velocity.x, self.body.velocity.y * 0.8)
 
         self.anim_tick += 1
@@ -142,7 +175,8 @@ class Player:
         self.prev_vy = self.body.velocity.y
 
     def render(self, surface, cam_x, cam_y, asset_mgr):
-        if self.is_dead: return
+        if self.is_dead:
+            return
         skin_bundle = f"player_{self.skin_id}"
 
         if self.is_digging:
@@ -161,5 +195,5 @@ class Player:
             sprite = pygame.transform.flip(sprite, True, False)
 
         rx = int(self.body.position.x - cam_x) - (sprite.get_width() // 2)
-        ry = int(self.body.position.y - cam_y) - _PLAYER_SPRITE_CY
+        ry = int(self.body.position.y - cam_y) - self._sprite_cy
         surface.blit(sprite, (rx, ry))
