@@ -10,14 +10,14 @@ class MenuState(State):
         self.font_med = pygame.font.Font(None, 20)
         
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
-        self.panel = UIPanel(0.5, 0.5, 170, 160)
+        self.panel = UIPanel(0.5, 0.5, 170, 190)
         self.root.add_child(self.panel)
         
-        self.panel.add_child(UILabel(0.5, 0.15, "MINER DIGGER", self.font_large, COLOR_GOLD))
-        self.panel.add_child(UIButton(0.5, 0.35, 130, 24, "ИГРАТЬ", self.font_med, lambda: self.manager.change("play")))
-        self.panel.add_child(UIButton(0.5, 0.55, 130, 24, "СКИНЫ", self.font_med, lambda: self.manager.change("skin")))
-        self.panel.add_child(UIButton(0.5, 0.75, 130, 24, "РЕКОРДЫ", self.font_med, lambda: self.manager.change("leaderboard")))
-        self.panel.add_child(UIButton(0.5, 0.95, 130, 24, "ВЫХОД", self.font_med, self._quit))
+        self.panel.add_child(UILabel(0.5, 0.12, "MINER DIGGER", self.font_large, COLOR_GOLD))
+        self.panel.add_child(UIButton(0.5, 0.30, 130, 24, "ИГРАТЬ", self.font_med, lambda: self.manager.change("play")))
+        self.panel.add_child(UIButton(0.5, 0.47, 130, 24, "СКИНЫ", self.font_med, lambda: self.manager.change("skin")))
+        self.panel.add_child(UIButton(0.5, 0.64, 130, 24, "РЕКОРДЫ", self.font_med, lambda: self.manager.change("leaderboard")))
+        self.panel.add_child(UIButton(0.5, 0.81, 130, 24, "ВЫХОД", self.font_med, self._quit))
         
         self.bg_gradient = pygame.Surface((CANVAS_W, CANVAS_H))
         for y in range(CANVAS_H):

@@ -33,8 +33,9 @@ class PlayState(State):
         self._setup_end_panels()
 
     def _setup_end_panels(self):
+        play_rect = pygame.Rect(0, PANEL_HEIGHT, CANVAS_W, CANVAS_H - PANEL_HEIGHT)
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
-        
+
         self.panel_over = UIPanel(0.5, 0.5, 180, 80, border_color=COLOR_DANGER)
         self.death_label = UILabel(0.5, 0.25, "ОБВАЛ В ШАХТЕ", self.font_big, COLOR_DANGER)
         self.panel_over.add_child(self.death_label)
@@ -57,8 +58,8 @@ class PlayState(State):
         self.panel_pause.add_child(UIButton(0.75, 0.8, 65, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
         self.panel_pause.visible = False
         self.root.add_child(self.panel_pause)
-        
-        self.root.layout(pygame.Rect(0, 0, CANVAS_W, CANVAS_H))
+
+        self.root.layout(play_rect)
 
     def _make_light_mask(self, radius):
         diam = radius * 2
@@ -148,9 +149,10 @@ class PlayState(State):
             return keys[code_en]
 
     def handle_event(self, event, mouse_pos):
+        play_pos = (mouse_pos[0], mouse_pos[1] - PANEL_HEIGHT)
         clicked = (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1)
-        self.root.update(mouse_pos, clicked)
-        
+        self.root.update(play_pos, clicked)
+
         if event.type == pygame.KEYDOWN and not self.game_over and not self.game_won:
             if event.key == pygame.K_ESCAPE:
                 self.paused = not self.paused

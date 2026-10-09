@@ -49,13 +49,16 @@ class RockEntity:
         rect = rotated.get_rect(center=(rx, ry))
         surface.blit(rotated, rect)
 
+PLAYER_W = 12
+PLAYER_H = 17
+_PLAYER_SPRITE_CY = 13
+
 class Player:
     def __init__(self, x, y, skin_id, space):
         self.skin_id = skin_id
-        bw, bh = AssetManager.get().get_hitbox(f"player_{skin_id}", "idle_0")
-        self.w = bw
-        self.h = bh
-        
+        self.w = PLAYER_W
+        self.h = PLAYER_H
+
         self.is_dead = False
         self.death_reason = ""
         self.facing_right = True
@@ -65,7 +68,7 @@ class Player:
         self.on_ground = False
         self.on_wall_l = False
         self.on_wall_r = False
-        
+
         self.health = 100.0
         self.stamina = 100.0
         self.prev_vy = 0.0
@@ -119,7 +122,7 @@ class Player:
         if jump and self.on_ground:
             self.body.velocity = (self.body.velocity.x, -170.0)
             particle_emitter(self.body.position.x, self.body.position.y + self.h/2, [(220, 225, 235)], 4)
-            
+
         if (self.on_wall_l and left) or (self.on_wall_r and right):
             if up and self.stamina > 0:
                 self.body.velocity = (self.body.velocity.x, -80.0)
@@ -135,7 +138,7 @@ class Player:
             self.is_digging = True
         else:
             self.is_digging = False
-            
+
         self.prev_vy = self.body.velocity.y
 
     def render(self, surface, cam_x, cam_y, asset_mgr):
@@ -158,5 +161,5 @@ class Player:
             sprite = pygame.transform.flip(sprite, True, False)
 
         rx = int(self.body.position.x - cam_x) - (sprite.get_width() // 2)
-        ry = int(self.body.position.y - cam_y) - (sprite.get_height() // 2) + 2
+        ry = int(self.body.position.y - cam_y) - _PLAYER_SPRITE_CY
         surface.blit(sprite, (rx, ry))
