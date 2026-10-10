@@ -17,9 +17,11 @@ class Level:
         center_x = self.w // 2
 
         for sx in range(center_x - 1, center_x + 2):
-            for sy in range(0, 3):
-                self.grid[sy][sx] = EMPTY
-                visited[sy][sx] = True
+            self.grid[0][sx] = WALL
+            self.grid[1][sx] = EMPTY
+            self.grid[2][sx] = EMPTY
+            visited[1][sx] = True
+            visited[2][sx] = True
 
         cur_x = center_x
         for y in range(1, self.h - 2):
@@ -72,5 +74,9 @@ class Level:
             self.total_coins += 1
 
         for sx in range(center_x - 1, center_x + 2):
-            for sy in range(0, 3):
-                self.grid[sy][sx] = EMPTY
+            self.grid[0][sx] = WALL
+            self.grid[1][sx] = EMPTY
+            self.grid[2][sx] = EMPTY
+
+        self.spawn_x = center_x * TILE_SIZE + TILE_SIZE / 2.0
+        self.spawn_y = 1 * TILE_SIZE + TILE_SIZE / 2.0
