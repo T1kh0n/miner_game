@@ -7,22 +7,22 @@ from states.state_machine import State
 class SkinState(State):
     def __init__(self, manager):
         super().__init__(manager)
-        self.font_large = pygame.font.Font(None, 28)
+        self.font_large = pygame.font.Font(None, 24)
         self.font_med = pygame.font.Font(None, 18)
         self.skin_keys = list(SKIN_PALETTES.keys())
         self.current_idx = 0
-        
+
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
-        self.panel = UIPanel(0.5, 0.5, 190, 170)
+        self.panel = UIPanel(0.5, 0.5, 200, 170)
         self.root.add_child(self.panel)
-        
+
         self.panel.add_child(UILabel(0.5, 0.12, "ВЫБОР ЭКИПИРОВКИ", self.font_large, COLOR_GOLD))
         self.lbl_name = UILabel(0.5, 0.65, "", self.font_med, COLOR_TEXT)
         self.panel.add_child(self.lbl_name)
         self.panel.add_child(UIButton(0.15, 0.45, 24, 24, "<", self.font_med, self._prev))
         self.panel.add_child(UIButton(0.85, 0.45, 24, 24, ">", self.font_med, self._next))
         self.panel.add_child(UIButton(0.5, 0.85, 100, 22, "НАЗАД", self.font_med, lambda: self.manager.change("menu")))
-        
+
         self.root.layout(pygame.Rect(0, 0, CANVAS_W, CANVAS_H))
 
     def enter(self):

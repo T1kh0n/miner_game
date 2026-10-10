@@ -6,16 +6,16 @@ from states.state_machine import State
 class LeaderboardState(State):
     def __init__(self, manager):
         super().__init__(manager)
-        self.font_large = pygame.font.Font(None, 26)
+        self.font_large = pygame.font.Font(None, 24)
         self.font_small = pygame.font.Font(None, 16)
-        
+
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
-        self.panel = UIPanel(0.5, 0.5, 220, 200)
+        self.panel = UIPanel(0.5, 0.5, 230, 200)
         self.root.add_child(self.panel)
-        
+
         self.panel.add_child(UILabel(0.5, 0.1, "ЗАЛ СЛАВЫ", self.font_large, COLOR_GOLD))
         self.panel.add_child(UIButton(0.5, 0.9, 90, 20, "МЕНЮ", self.font_small, lambda: self.manager.change("menu")))
-        
+
         self.root.layout(pygame.Rect(0, 0, CANVAS_W, CANVAS_H))
 
     def handle_event(self, event, mouse_pos):
@@ -30,5 +30,9 @@ class LeaderboardState(State):
         records = self.manager.leaderboard.entries
         start_y = CANVAS_H // 2 - 58
         for i, rec in enumerate(records[:7]):
-            txt = self.font_small.render(f"{i+1}. Счёт: {rec['score']} | {rec['depth']}м | {rec['skin']}", True, COLOR_TEXT)
-            surface.blit(txt, (CANVAS_W // 2 - 95, start_y + i * 18))
+            txt = self.font_small.render(f"{i+1}. {rec['skin'][:7]} | {rec['score']}pts | {rec['depth']}m", True, COLOR_TEXT)
+            max_w = 200
+            if txt.get_width() > max_w:
+                scale = max_w / txt.get_width()
+                txt = pygame.transform.smoothscale(txt, (int(txt.get_width() * scale), int(txt.get_height() * scale)))
+            surface.blit(txt, (CANVAS_W // 2 - txt.get_width() // 2, start_y + i * 18))
