@@ -39,6 +39,15 @@ class RockEntity:
         self.shape.elasticity = 0.1
         self.shape.collision_type = 2
         space.add(self.body, self.shape)
+        self._locked_velocity = None
+
+    def lock_velocity(self):
+        self._locked_velocity = (self.body.velocity.x, self.body.velocity.y)
+
+    def restore_velocity(self):
+        if self._locked_velocity is not None:
+            self.body.velocity = self._locked_velocity
+            self._locked_velocity = None
 
     def render(self, surface, cam_x, cam_y, asset_mgr):
         sprite = asset_mgr.get_sprite("tiles", "rock")
@@ -73,7 +82,9 @@ class Player:
         self.death_reason = ""
         self.facing_right = True
         self.is_digging = False
+        self.is_climbing = False
         self.dig_timer = 0
+        self.climb_tick = 0
         self.anim_tick = 0
         self.on_ground = False
         self.on_wall_l = False
@@ -91,6 +102,21 @@ class Player:
         self.shape.elasticity = 0.0
         self.shape.collision_type = 3
         space.add(self.body, self.shape)
+
+    def _get_current_frame_key(self):
+        if self.is_climbing:
+            f_idx = (self.climb_tick // 6) % 4
+            return f"climb_{f_idx}"
+        if self.is_digging:
+            f_idx = min(3, (12 - self.dig_timer) // 3)
+            return f"dig_{f_idx}"
+        if not self.on_ground:
+            return "jump" if self.body.velocity.y < 0 else "fall"
+        if abs(self.body.velocity.x) > 10.0:
+            f_idx = (self.anim_tick // 4) % 8
+            return f"walk_{f_idx}"
+        f_idx = (self.anim_tick // 20) % 2
+        return f"idle_{f_idx}"
 
     def update(self, up, down, left, right, jump, dt, space, particle_emitter, camera):
         if self.is_dead:
@@ -120,11 +146,12 @@ class Player:
             self.body.velocity = (self.body.velocity.x, max(0.0, self.body.velocity.y))
 
         on_wall = (self.on_wall_l and left) or (self.on_wall_r and right)
+        self.is_climbing = on_wall and up and self.stamina > 0 and not on_ceiling and not self.on_ground
 
-        if self.on_ground and not (on_wall and up):
+        if self.on_ground and not self.is_climbing:
             self.stamina = min(100.0, self.stamina + 40.0 * dt)
-            if self.prev_vy > 380.0:
-                dmg = (self.prev_vy - 380.0) * 0.4
+            if self.prev_vy > 220.0:
+                dmg = (self.prev_vy - 220.0) * 0.5
                 self.health -= dmg
                 if self.health <= 0:
                     self.is_dead = True
@@ -160,6 +187,7 @@ class Player:
             if up and self.stamina > 0 and not on_ceiling:
                 self.body.velocity = (self.body.velocity.x, -80.0)
                 self.stamina = max(0.0, self.stamina - 30.0 * dt)
+                self.climb_tick += 1
             elif not self.on_ground and self.body.velocity.y > 0:
                 self.body.velocity = (self.body.velocity.x, self.body.velocity.y * 0.8)
 
@@ -170,31 +198,47 @@ class Player:
         else:
             self.is_digging = False
 
+        frame_key = self._get_current_frame_key()
+        mgr = AssetManager.get()
+        hw, hh = mgr.get_hitbox(f"player_{self.skin_id}", frame_key)
+        hw = max(8, hw)
+        hh = max(10, hh)
+        if hw != self.w or hh != self.h:
+            old_pos = self.body.position
+            space.remove(self.shape)
+            self.w = hw
+            self.h = hh
+            self.shape = pymunk.Poly.create_box(self.body, (self.w, self.h))
+            self.shape.friction = 0.0
+            self.shape.elasticity = 0.0
+            self.shape.collision_type = 3
+            space.add(self.shape)
+            self.body.position = old_pos
+
         self.prev_vy = self.body.velocity.y
 
     def render(self, surface, cam_x, cam_y, asset_mgr):
         if self.is_dead:
             return
         skin_bundle = f"player_{self.skin_id}"
+        frame_key = self._get_current_frame_key()
+        sprite = asset_mgr.get_sprite(skin_bundle, frame_key)
 
-        if self.is_digging:
-            f_idx = min(3, (12 - self.dig_timer) // 3)
-            sprite = asset_mgr.get_sprite(skin_bundle, f"dig_{f_idx}")
-        elif not self.on_ground:
-            sprite = asset_mgr.get_sprite(skin_bundle, "jump" if self.body.velocity.y < 0 else "fall")
-        elif abs(self.body.velocity.x) > 10.0:
-            f_idx = (self.anim_tick // 4) % 8
-            sprite = asset_mgr.get_sprite(skin_bundle, f"walk_{f_idx}")
+        sprite_w = sprite.get_width()
+        mask = pygame.mask.from_surface(sprite)
+        rects = mask.get_bounding_rects()
+        if rects:
+            union = rects[0].unionall(rects[1:])
+            ox = union.centerx
+            oy = union.centery
         else:
-            f_idx = (self.anim_tick // 20) % 2
-            sprite = asset_mgr.get_sprite(skin_bundle, f"idle_{f_idx}")
+            ox = sprite_w // 2
+            oy = sprite.get_height() // 2
 
         if not self.facing_right:
             sprite = pygame.transform.flip(sprite, True, False)
-            ox = sprite.get_width() - self.offset_x
-        else:
-            ox = self.offset_x
+            ox = sprite_w - ox
 
         rx = int(self.body.position.x - cam_x) - ox
-        ry = int(self.body.position.y - cam_y) - self.offset_y
+        ry = int(self.body.position.y - cam_y) - oy
         surface.blit(sprite, (rx, ry))
