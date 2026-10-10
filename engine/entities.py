@@ -118,7 +118,7 @@ class Player:
         f_idx = (self.anim_tick // 20) % 2
         return f"idle_{f_idx}"
 
-    def update(self, up, down, left, right, jump, dt, space, particle_emitter, camera):
+    def update(self, up, down, left, right, jump, climb_held, dt, space, particle_emitter, camera):
         if self.is_dead:
             return
 
@@ -146,7 +146,7 @@ class Player:
             self.body.velocity = (self.body.velocity.x, max(0.0, self.body.velocity.y))
 
         on_wall = (self.on_wall_l and left) or (self.on_wall_r and right)
-        self.is_climbing = on_wall and up and self.stamina > 0 and not on_ceiling and not self.on_ground
+        self.is_climbing = on_wall and climb_held and self.stamina > 0 and not on_ceiling and not self.on_ground
 
         if self.on_ground and not self.is_climbing:
             self.stamina = min(100.0, self.stamina + 40.0 * dt)
@@ -184,15 +184,25 @@ class Player:
             particle_emitter(self.body.position.x, self.body.position.y + half_h, [(220, 225, 235)], 4)
 
         if on_wall:
-            if up and self.stamina > 0 and not on_ceiling:
-                self.body.velocity = (self.body.velocity.x, -80.0)
-                self.stamina = max(0.0, self.stamina - 30.0 * dt)
-                self.climb_tick += 1
+            if climb_held and self.stamina > 0 and not on_ceiling:
+                if up:
+                    self.body.velocity = (self.body.velocity.x, -80.0)
+                    self.stamina = max(0.0, self.stamina - 30.0 * dt)
+                    self.climb_tick += 1
+                elif down:
+                    self.body.velocity = (self.body.velocity.x, 60.0)
+                    self.climb_tick += 1
+                else:
+                    self.body.velocity = (self.body.velocity.x, 0.0)
+                    self.stamina = max(0.0, self.stamina - 5.0 * dt)
             elif not self.on_ground and self.body.velocity.y > 0:
                 self.body.velocity = (self.body.velocity.x, self.body.velocity.y * 0.8)
 
         self.anim_tick += 1
-        if self.dig_timer > 0:
+        if self.is_climbing:
+            self.is_digging = False
+            self.dig_timer = 0
+        elif self.dig_timer > 0:
             self.dig_timer -= 1
             self.is_digging = True
         else:
