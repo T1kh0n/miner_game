@@ -1,9 +1,7 @@
 import sys
-import atexit
 import pygame
 from core.config import CANVAS_W, CANVAS_H, INITIAL_SCREEN_W, INITIAL_SCREEN_H, FPS
 from engine.asset_generator import AssetGenerator
-from core.recorder import VideoRecorder
 from core.leaderboard import LeaderboardManager
 from states.state_machine import StateMachine
 from states.menu_state import MenuState
@@ -20,8 +18,6 @@ class MinerApp:
         self.clock = pygame.time.Clock()
         self.is_fullscreen = False
         AssetGenerator.generate_all()
-        self.recorder = VideoRecorder(INITIAL_SCREEN_W, INITIAL_SCREEN_H, FPS)
-        atexit.register(self.recorder.stop)
         self.state_machine = StateMachine()
         self.state_machine.leaderboard = LeaderboardManager()
         self.state_machine.selected_skin = "classic"
@@ -49,10 +45,9 @@ class MinerApp:
             vp = self.get_viewport_rect()
             raw_pos = pygame.mouse.get_pos()
             virtual_pos = (int((raw_pos[0] - vp.x) * (CANVAS_W / max(1, vp.w))), int((raw_pos[1] - vp.y) * (CANVAS_H / max(1, vp.h))))
-            
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    self.recorder.stop()
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
@@ -64,7 +59,6 @@ class MinerApp:
 
             self.screen.fill((0, 0, 0))
             self.screen.blit(pygame.transform.scale(self.canvas, (vp.w, vp.h)), (vp.x, vp.y))
-            self.recorder.record_frame(self.screen)
             pygame.display.flip()
             self.clock.tick(FPS)
 
