@@ -13,7 +13,13 @@ class MinerApp:
     def __init__(self):
         pygame.init()
         pygame.display.set_caption("Miner Digger — Cavern Rolling Physics")
-        self.screen = pygame.display.set_mode((INITIAL_SCREEN_W, INITIAL_SCREEN_H), pygame.RESIZABLE)
+        info = pygame.display.Info()
+        screen_w = info.current_w if info.current_w > 0 else INITIAL_SCREEN_W
+        screen_h = info.current_h if info.current_h > 0 else INITIAL_SCREEN_H
+        scale = max(1, min((screen_w - 80) // CANVAS_W, (screen_h - 80) // CANVAS_H))
+        win_w = int(CANVAS_W * scale)
+        win_h = int(CANVAS_H * scale)
+        self.screen = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE)
         self.canvas = pygame.Surface((CANVAS_W, CANVAS_H))
         self.clock = pygame.time.Clock()
         self.is_fullscreen = False
@@ -32,7 +38,13 @@ class MinerApp:
         if self.is_fullscreen:
             self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
-            self.screen = pygame.display.set_mode((INITIAL_SCREEN_W, INITIAL_SCREEN_H), pygame.RESIZABLE)
+            info = pygame.display.Info()
+            screen_w = info.current_w if info.current_w > 0 else INITIAL_SCREEN_W
+            screen_h = info.current_h if info.current_h > 0 else INITIAL_SCREEN_H
+            scale = max(1, min((screen_w - 80) // CANVAS_W, (screen_h - 80) // CANVAS_H))
+            win_w = int(CANVAS_W * scale)
+            win_h = int(CANVAS_H * scale)
+            self.screen = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE)
 
     def get_viewport_rect(self):
         win_w, win_h = self.screen.get_size()
@@ -44,12 +56,18 @@ class MinerApp:
         while True:
             vp = self.get_viewport_rect()
             raw_pos = pygame.mouse.get_pos()
-            virtual_pos = (int((raw_pos[0] - vp.x) * (CANVAS_W / max(1, vp.w))), int((raw_pos[1] - vp.y) * (CANVAS_H / max(1, vp.h))))
+            virtual_pos = (
+                int((raw_pos[0] - vp.x) * (CANVAS_W / max(1, vp.w))),
+                int((raw_pos[1] - vp.y) * (CANVAS_H / max(1, vp.h)))
+            )
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
+                if event.type == pygame.VIDEORESIZE:
+                    if not self.is_fullscreen:
+                        self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
                     self.toggle_fullscreen()
                 self.state_machine.handle_event(event, virtual_pos)
