@@ -96,6 +96,16 @@ class PlayState(State):
         self.rocks = []
         self.tile_shapes = {}
 
+        top_boundary = pymunk.Segment(
+            self.space.static_body,
+            (0, 0),
+            (self.world_w, 0),
+            2
+        )
+        top_boundary.friction = 0.5
+        top_boundary.collision_type = 1
+        self.space.add(top_boundary)
+
         for y in range(GRID_H):
             for x in range(GRID_W):
                 tile = self.level.grid[y][x]
@@ -106,9 +116,23 @@ class PlayState(State):
                     self.rocks.append(RockEntity(x, y, self.space))
 
         skin = getattr(self.manager, "selected_skin", "classic")
-        self.player = Player(self.level.spawn_x, self.level.spawn_y, skin, self.space)
+        spawn_x, spawn_y = self._find_spawn()
+        self.player = Player(spawn_x, spawn_y, skin, self.space)
 
-        def post_solve_crush(arbiter, space, data):
+        rock_map = {r.shape: r for r in self.rocks}
+
+        def pre_solve_player_rock(arbiter, space, data):
+            rock_shape = arbiter.shapes[1] if arbiter.shapes[0] == data["player"].shape else arbiter.shapes[0]
+            rock = data["rock_map"].get(rock_shape)
+            if rock:
+                rock.lock_velocity()
+            return True
+
+        def post_solve_player_rock(arbiter, space, data):
+            rock_shape = arbiter.shapes[1] if arbiter.shapes[0] == data["player"].shape else arbiter.shapes[0]
+            rock = data["rock_map"].get(rock_shape)
+            if rock:
+                rock.restore_velocity()
             if arbiter.total_impulse.length > 2500:
                 p = data["player"]
                 if not p.is_dead:
@@ -121,13 +145,48 @@ class PlayState(State):
                     data["camera"].add_shake(8.0, 20)
                     data["emit"](p.body.position.x, p.body.position.y, [(255, 60, 60), (255, 180, 40)], 25)
 
-        collision_data = {
+        def post_solve_wall(arbiter, space, data):
+            if arbiter.total_impulse.length > 2500:
+                p = data["player"]
+                if not p.is_dead:
+                    p.is_dead = True
+                    n = arbiter.contact_point_set.normal
+                    if abs(n.x) > abs(n.y):
+                        p.death_reason = "РАЗМАЗАЛО О СТЕНУ"
+                    else:
+                        p.death_reason = "РАЗДАВИЛО КАМНЕМ"
+                    data["camera"].add_shake(8.0, 20)
+                    data["emit"](p.body.position.x, p.body.position.y, [(255, 60, 60), (255, 180, 40)], 25)
+
+        player_rock_data = {
+            "player": self.player,
+            "camera": self.camera,
+            "emit": self.emit_particles,
+            "rock_map": rock_map
+        }
+        wall_data = {
             "player": self.player,
             "camera": self.camera,
             "emit": self.emit_particles
         }
-        self.space.on_collision(3, 2, post_solve=post_solve_crush, data=collision_data)
-        self.space.on_collision(3, 1, post_solve=post_solve_crush, data=collision_data)
+        self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=player_rock_data)
+        self.space.on_collision(3, 1, post_solve=post_solve_wall, data=wall_data)
+
+    def _find_spawn(self):
+        center_x = GRID_W // 2
+        for y in range(GRID_H):
+            if self.level.grid[y][center_x] == EMPTY:
+                ground_y = y
+                while ground_y + 1 < GRID_H and self.level.grid[ground_y + 1][center_x] == EMPTY:
+                    ground_y += 1
+                return (
+                    center_x * TILE_SIZE + TILE_SIZE / 2.0,
+                    ground_y * TILE_SIZE - TILE_SIZE / 2.0
+                )
+        return (
+            center_x * TILE_SIZE + TILE_SIZE / 2.0,
+            1 * TILE_SIZE + TILE_SIZE / 2.0
+        )
 
     def add_static_tile(self, tx, ty):
         shape = pymunk.Poly(self.space.static_body, [
@@ -164,7 +223,7 @@ class PlayState(State):
             if self.level.grid[dig_y][dig_x] == DIRT:
                 self.level.grid[dig_y][dig_x] = EMPTY
                 self.player.dig_timer = 12
-                self.camera.add_shake(1.0, 4)
+                self.camera.add_shake(0.6, 3)
                 self.emit_particles(
                     dig_x * TILE_SIZE + TILE_SIZE // 2,
                     dig_y * TILE_SIZE + TILE_SIZE // 2,
@@ -363,12 +422,5 @@ class PlayState(State):
         pygame.draw.rect(self.panel_surface, (20, 80, 20), (bar_x, 18, bar_w, 8))
         pygame.draw.rect(self.panel_surface, (40, 200, 40), (bar_x, 18, int(bar_w * max(0.0, self.player.stamina / 100.0)), 8))
         pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 18, bar_w, 8), 1)
-
-        rec_dot_x = 158
-        rec_dot_y = 15
-        if (pygame.time.get_ticks() // 500) % 2 == 0:
-            pygame.draw.circle(self.panel_surface, (255, 60, 60), (rec_dot_x, rec_dot_y), 3)
-        rec_surf = self.font.render("REC", True, (255, 100, 100))
-        self.panel_surface.blit(rec_surf, (rec_dot_x + 6, rec_dot_y - rec_surf.get_height() // 2))
 
         surface.blit(self.panel_surface, (0, 0))
