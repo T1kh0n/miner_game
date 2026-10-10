@@ -5,7 +5,7 @@ import math
 from core.config import (
     CANVAS_W, CANVAS_H, PANEL_HEIGHT, TILE_SIZE, GRID_W, GRID_H,
     COLOR_TEXT, COLOR_GOLD, COLOR_DANGER, COLOR_SUCCESS, PAL_OUTLINE,
-    WALL, DIRT, ROCK, COIN, EMPTY
+    WALL, DIRT, ROCK, COIN, EMPTY, STONE
 )
 from engine.level import Level
 from engine.entities import Player, RockEntity, Particle
@@ -14,11 +14,47 @@ from engine.ui import UIButton, UILabel, UIPanel, UINode
 from core.camera import Camera
 from states.state_machine import State
 
+class TutorialSystem:
+    def __init__(self, font):
+        self.font = font
+        self.hints = []
+        self.fired = set()
+
+    def fire(self, key, text):
+        if key not in self.fired:
+            self.fired.add(key)
+            self.hints.append({"text": text, "life": 240, "max_life": 240})
+
+    def update(self):
+        for h in self.hints[:]:
+            h["life"] -= 1
+            if h["life"] <= 0:
+                self.hints.remove(h)
+
+    def render(self, surface):
+        y_pos = CANVAS_H - PANEL_HEIGHT - 16
+        for h in self.hints:
+            alpha = min(255, int(255 * (h["life"] / 30.0))) if h["life"] < 30 else 255
+            ts = self.font.render(h["text"], True, (255, 235, 150))
+            max_w = CANVAS_W - 16
+            if ts.get_width() > max_w and ts.get_width() > 0:
+                scale = max_w / ts.get_width()
+                ts = pygame.transform.smoothscale(ts, (int(ts.get_width() * scale), int(ts.get_height() * scale)))
+            bg = pygame.Surface((ts.get_width() + 10, ts.get_height() + 6), pygame.SRCALPHA)
+            bg.fill((16, 20, 30, int(210 * (alpha / 255.0))))
+            pygame.draw.rect(bg, (255, 215, 60, int(180 * (alpha / 255.0))), bg.get_rect(), 1, border_radius=3)
+            bx = (CANVAS_W - bg.get_width()) // 2
+            surface.blit(bg, (bx, y_pos - 3))
+            surf_a = ts.copy()
+            surf_a.set_alpha(alpha)
+            surface.blit(surf_a, (bx + 5, y_pos))
+            y_pos -= ts.get_height() + 8
+
 class PlayState(State):
     def __init__(self, manager):
         super().__init__(manager)
-        self.font = pygame.font.Font(None, 18)
-        self.font_big = pygame.font.Font(None, 28)
+        self.font = pygame.font.Font(None, 16)
+        self.font_big = pygame.font.Font(None, 22)
         self.world_w = GRID_W * TILE_SIZE
         self.world_h = GRID_H * TILE_SIZE
 
@@ -37,26 +73,26 @@ class PlayState(State):
         canvas_rect = pygame.Rect(0, 0, CANVAS_W, CANVAS_H)
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
 
-        self.panel_over = UIPanel(0.5, 0.5, 180, 80, border_color=COLOR_DANGER)
-        self.death_label = UILabel(0.5, 0.25, "ОБВАЛ В ШАХТЕ", self.font_big, COLOR_DANGER)
+        self.panel_over = UIPanel(0.5, 0.5, 190, 84, border_color=COLOR_DANGER)
+        self.death_label = UILabel(0.5, 0.28, "ОБВАЛ В ШАХТЕ", self.font_big, COLOR_DANGER)
         self.panel_over.add_child(self.death_label)
-        self.panel_over.add_child(UIButton(0.25, 0.75, 65, 20, "ЗАНОВО", self.font, self.enter))
-        self.panel_over.add_child(UIButton(0.75, 0.75, 65, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
+        self.panel_over.add_child(UIButton(0.25, 0.75, 68, 20, "ЗАНОВО", self.font, self.enter))
+        self.panel_over.add_child(UIButton(0.75, 0.75, 68, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
         self.panel_over.visible = False
         self.root.add_child(self.panel_over)
 
-        self.panel_won = UIPanel(0.5, 0.5, 180, 80, border_color=COLOR_SUCCESS)
-        self.panel_won.add_child(UILabel(0.5, 0.25, "ПОБЕДА!", self.font_big, COLOR_SUCCESS))
-        self.panel_won.add_child(UIButton(0.25, 0.75, 65, 20, "ЗАНОВО", self.font, self.enter))
-        self.panel_won.add_child(UIButton(0.75, 0.75, 65, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
+        self.panel_won = UIPanel(0.5, 0.5, 190, 84, border_color=COLOR_SUCCESS)
+        self.panel_won.add_child(UILabel(0.5, 0.28, "ПОБЕДА!", self.font_big, COLOR_SUCCESS))
+        self.panel_won.add_child(UIButton(0.25, 0.75, 68, 20, "ЗАНОВО", self.font, self.enter))
+        self.panel_won.add_child(UIButton(0.75, 0.75, 68, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
         self.panel_won.visible = False
         self.root.add_child(self.panel_won)
 
-        self.panel_pause = UIPanel(0.5, 0.5, 180, 100, border_color=(100, 150, 255))
+        self.panel_pause = UIPanel(0.5, 0.5, 190, 100, border_color=(100, 150, 255))
         self.panel_pause.add_child(UILabel(0.5, 0.2, "ПАУЗА", self.font_big, (100, 150, 255)))
         self.panel_pause.add_child(UIButton(0.5, 0.5, 140, 20, "ПРОДОЛЖИТЬ", self.font, self._unpause))
-        self.panel_pause.add_child(UIButton(0.25, 0.8, 65, 20, "ЗАНОВО", self.font, self.enter))
-        self.panel_pause.add_child(UIButton(0.75, 0.8, 65, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
+        self.panel_pause.add_child(UIButton(0.25, 0.8, 68, 20, "ЗАНОВО", self.font, self.enter))
+        self.panel_pause.add_child(UIButton(0.75, 0.8, 68, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
         self.panel_pause.visible = False
         self.root.add_child(self.panel_pause)
 
@@ -96,27 +132,35 @@ class PlayState(State):
         self.rocks = []
         self.tile_shapes = {}
 
-        top_boundary = pymunk.Segment(
-            self.space.static_body,
-            (0, 0),
-            (self.world_w, 0),
-            2
-        )
+        self.tutorial = TutorialSystem(self.font)
+        self.tutorial.fire("start", "WASD / Arrows: Move  |  Space: Jump  |  Shift: Climb")
+
+        top_boundary = pymunk.Segment(self.space.static_body, (0, 0), (self.world_w, 0), 2)
         top_boundary.friction = 0.5
         top_boundary.collision_type = 1
         self.space.add(top_boundary)
 
+        left_boundary = pymunk.Segment(self.space.static_body, (0, 0), (0, self.world_h), 2)
+        left_boundary.friction = 0.5
+        left_boundary.collision_type = 1
+        self.space.add(left_boundary)
+
+        right_boundary = pymunk.Segment(self.space.static_body, (self.world_w, 0), (self.world_w, self.world_h), 2)
+        right_boundary.friction = 0.5
+        right_boundary.collision_type = 1
+        self.space.add(right_boundary)
+
         for y in range(GRID_H):
             for x in range(GRID_W):
                 tile = self.level.grid[y][x]
-                if tile in (WALL, DIRT):
+                if tile in (WALL, DIRT, STONE):
                     self.add_static_tile(x, y)
                 elif tile == ROCK:
                     self.level.grid[y][x] = EMPTY
                     self.rocks.append(RockEntity(x, y, self.space))
 
         skin = getattr(self.manager, "selected_skin", "classic")
-        spawn_x, spawn_y = self._find_spawn()
+        spawn_x, spawn_y = self.level.spawn_x, self.level.spawn_y
         self.player = Player(spawn_x, spawn_y, skin, self.space)
 
         rock_map = {r.shape: r for r in self.rocks}
@@ -172,22 +216,6 @@ class PlayState(State):
         self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=player_rock_data)
         self.space.on_collision(3, 1, post_solve=post_solve_wall, data=wall_data)
 
-    def _find_spawn(self):
-        center_x = GRID_W // 2
-        for y in range(GRID_H):
-            if self.level.grid[y][center_x] == EMPTY:
-                ground_y = y
-                while ground_y + 1 < GRID_H and self.level.grid[ground_y + 1][center_x] == EMPTY:
-                    ground_y += 1
-                return (
-                    center_x * TILE_SIZE + TILE_SIZE / 2.0,
-                    ground_y * TILE_SIZE - TILE_SIZE / 2.0
-                )
-        return (
-            center_x * TILE_SIZE + TILE_SIZE / 2.0,
-            1 * TILE_SIZE + TILE_SIZE / 2.0
-        )
-
     def add_static_tile(self, tx, ty):
         shape = pymunk.Poly(self.space.static_body, [
             (tx * TILE_SIZE, ty * TILE_SIZE),
@@ -232,6 +260,7 @@ class PlayState(State):
                 if (dig_x, dig_y) in self.tile_shapes:
                     self.space.remove(self.tile_shapes[(dig_x, dig_y)])
                     del self.tile_shapes[(dig_x, dig_y)]
+                self.tutorial.fire("dig", "Dirt cleared! Watch for falling rocks above.")
                 return True
         return False
 
@@ -260,10 +289,17 @@ class PlayState(State):
         left = self._is_key(keys, pygame.K_LEFT, 1092) or self._is_key(keys, pygame.K_a, 1092)
         right = self._is_key(keys, pygame.K_RIGHT, 1074) or self._is_key(keys, pygame.K_d, 1074)
         jump = keys[pygame.K_SPACE]
+        climb_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
 
-        self.player.update(up, down, left, right, jump, dt, self.space, self.emit_particles, self.camera)
+        self.player.update(up, down, left, right, jump, climb_held, dt, self.space, self.emit_particles, self.camera)
 
-        if not self.player.is_dead:
+        if (self.player.on_wall_l or self.player.on_wall_r) and not self.player.on_ground:
+            self.tutorial.fire("wall_contact", "Press Shift to climb or grab the wall!")
+
+        if self.player.is_climbing:
+            self.tutorial.fire("climb", "Climbing uses stamina. Rest on ground to recover!")
+
+        if not self.player.is_dead and not self.player.is_climbing:
             px = self.player.body.position.x
             py = self.player.body.position.y
             hw = self.player.w / 2
@@ -289,6 +325,7 @@ class PlayState(State):
                 self._dig_tile(dig_x, dig_y)
 
         self.space.step(dt)
+        self.tutorial.update()
 
         if self.player.is_dead:
             self.game_over = True
@@ -317,6 +354,7 @@ class PlayState(State):
                     p_ty * TILE_SIZE + TILE_SIZE // 2,
                     [(255, 230, 80), (255, 180, 30)], 14
                 )
+                self.tutorial.fire("coin", "Collect all coins to win!")
                 if self.coins_left <= 0:
                     self.game_won = True
                     self.panel_won.visible = True
@@ -327,15 +365,16 @@ class PlayState(State):
 
     def render(self, surface):
         if not self.paused:
+            moving_down = (not self.player.on_ground and self.player.body.velocity.y > 60.0)
             cam_x, cam_y = self.camera.update(
                 self.player.body.position.x, self.player.body.position.y,
-                self.player.facing_right, self.player.body.velocity.y > 0
+                self.player.facing_right, moving_down
             )
         else:
             cam_x, cam_y = self.camera.x, self.camera.y
         cam_x, cam_y = int(cam_x), int(cam_y)
 
-        depth_ratio = min(1.0, (self.player.body.position.y / self.world_h) * 2.5)
+        depth_ratio = min(1.0, max(0.0, ((self.player.body.position.y - 60.0) / self.world_h) * 2.5))
         for y in range(CANVAS_H - PANEL_HEIGHT):
             t = y / (CANVAS_H - PANEL_HEIGHT)
             cr = int((45 * (1.0 - depth_ratio) + 8 * depth_ratio) * (1.0 - t * 0.5))
@@ -357,10 +396,12 @@ class PlayState(State):
                 if 0 <= x < GRID_W and 0 <= y < GRID_H:
                     cell = self.level.grid[y][x]
                     if cell == WALL:
-                        t_name = "wall_surface" if y <= 1 and (y == 0 or self.level.grid[y - 1][x] != WALL) else "wall_under"
+                        t_name = "wall_surface" if (y == 0 or self.level.grid[y - 1][x] == EMPTY) else "wall_under"
                         self.play_view.blit(AssetManager.get().get_sprite("tiles", t_name), (rx, ry))
                     elif cell == DIRT:
                         self.play_view.blit(AssetManager.get().get_sprite("tiles", "dirt"), (rx, ry))
+                    elif cell == STONE:
+                        self.play_view.blit(AssetManager.get().get_sprite("tiles", "stone"), (rx, ry))
                     elif cell == COIN:
                         self.play_view.blit(coin_frame, (rx, ry))
 
@@ -371,7 +412,7 @@ class PlayState(State):
             p.render(self.play_view, cam_x, cam_y)
         self.player.render(self.play_view, cam_x, cam_y, asset_mgr)
 
-        self.darkness_layer.fill((6, 8, 12, min(255, int(40 + depth_ratio * 215))))
+        self.darkness_layer.fill((6, 8, 12, min(255, int(30 + depth_ratio * 225))))
         for y in range(start_row, end_row):
             for x in range(start_col, end_col):
                 if 0 <= x < GRID_W and 0 <= y < GRID_H and self.level.grid[y][x] == COIN:
@@ -389,6 +430,7 @@ class PlayState(State):
         self.play_view.blit(self.darkness_layer, (0, 0))
         surface.blit(self.play_view, (0, PANEL_HEIGHT))
         self._render_panel(surface)
+        self.tutorial.render(surface)
         self.root.render(surface)
 
     def _render_panel(self, surface):
@@ -402,25 +444,30 @@ class PlayState(State):
         pygame.draw.line(self.panel_surface, (255, 200, 60), (0, PANEL_HEIGHT - 2), (CANVAS_W, PANEL_HEIGHT - 2), 2)
         pygame.draw.line(self.panel_surface, PAL_OUTLINE, (0, PANEL_HEIGHT - 1), (CANVAS_W, PANEL_HEIGHT - 1), 1)
 
-        score_surf = self.font.render(f"СЧЁТ: {self.score}", True, COLOR_GOLD)
-        self.panel_surface.blit(score_surf, (8, 4))
+        score_surf = self.font.render(f"SCORE:{self.score}", True, COLOR_GOLD)
+        self.panel_surface.blit(score_surf, (6, 5))
 
-        depth_surf = self.font.render(f"ГЛУБИНА: {int(self.player.body.position.y // TILE_SIZE)}м", True, COLOR_TEXT)
-        self.panel_surface.blit(depth_surf, (8, 17))
+        depth_val = max(0, int((self.player.body.position.y - 60.0) // TILE_SIZE))
+        depth_surf = self.font.render(f"DEPTH:{depth_val}m", True, COLOR_TEXT)
+        self.panel_surface.blit(depth_surf, (6, 17))
 
-        bar_x = 252
+        coins_surf = self.font.render(f"COINS:{self.coins_left}", True, COLOR_TEXT)
+        cx_pos = CANVAS_W // 2 - coins_surf.get_width() // 2
+        self.panel_surface.blit(coins_surf, (cx_pos, 5))
+
+        bar_x = CANVAS_W - 68
         bar_w = 60
 
         hp_label = self.font.render("HP", True, COLOR_TEXT)
-        self.panel_surface.blit(hp_label, (bar_x - hp_label.get_width() - 4, 4))
+        self.panel_surface.blit(hp_label, (bar_x - hp_label.get_width() - 3, 5))
         pygame.draw.rect(self.panel_surface, (100, 20, 20), (bar_x, 5, bar_w, 8))
         pygame.draw.rect(self.panel_surface, (250, 40, 40), (bar_x, 5, int(bar_w * max(0.0, self.player.health / 100.0)), 8))
         pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 5, bar_w, 8), 1)
 
         st_label = self.font.render("ST", True, COLOR_TEXT)
-        self.panel_surface.blit(st_label, (bar_x - st_label.get_width() - 4, 17))
-        pygame.draw.rect(self.panel_surface, (20, 80, 20), (bar_x, 18, bar_w, 8))
-        pygame.draw.rect(self.panel_surface, (40, 200, 40), (bar_x, 18, int(bar_w * max(0.0, self.player.stamina / 100.0)), 8))
-        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 18, bar_w, 8), 1)
+        self.panel_surface.blit(st_label, (bar_x - st_label.get_width() - 3, 17))
+        pygame.draw.rect(self.panel_surface, (20, 80, 20), (bar_x, 17, bar_w, 8))
+        pygame.draw.rect(self.panel_surface, (40, 200, 40), (bar_x, 17, int(bar_w * max(0.0, self.player.stamina / 100.0)), 8))
+        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 17, bar_w, 8), 1)
 
         surface.blit(self.panel_surface, (0, 0))
