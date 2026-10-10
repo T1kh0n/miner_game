@@ -135,7 +135,7 @@ class AssetGenerator:
     def generate_player_skin(skin_id, pal):
         fw = TILE_SIZE + 8
         fh = TILE_SIZE + 4
-        total_frames = 16
+        total_frames = 20
         sheet = pygame.Surface((fw * total_frames, fh), pygame.SRCALPHA)
         frames_meta = {}
         walk_offsets = [
@@ -144,27 +144,33 @@ class AssetGenerator:
         ]
         for i in range(8):
             bob, l_leg, r_leg = walk_offsets[i]
-            frame_surf = AssetGenerator._render_character_frame(pal, bob, l_leg, r_leg, False, 0.0, False)
+            frame_surf = AssetGenerator._render_character_frame(pal, bob, l_leg, r_leg, False, 0.0, False, False, 0)
             sheet.blit(frame_surf, (i * fw, 0))
             frames_meta[f"walk_{i}"] = {"x": i * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
         for i in range(4):
             dig_phase = i / 3.0
-            frame_surf = AssetGenerator._render_character_frame(pal, 0, 0, 0, True, dig_phase, False)
+            frame_surf = AssetGenerator._render_character_frame(pal, 0, 0, 0, True, dig_phase, False, False, 0)
             idx = 8 + i
             sheet.blit(frame_surf, (idx * fw, 0))
             frames_meta[f"dig_{i}"] = {"x": idx * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
         for i in range(2):
             idle_bob = i
-            frame_surf = AssetGenerator._render_character_frame(pal, idle_bob, 0, 0, False, 0.0, False)
+            frame_surf = AssetGenerator._render_character_frame(pal, idle_bob, 0, 0, False, 0.0, False, False, 0)
             idx = 12 + i
             sheet.blit(frame_surf, (idx * fw, 0))
             frames_meta[f"idle_{i}"] = {"x": idx * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
-        fall_surf = AssetGenerator._render_character_frame(pal, -2, -2, 2, False, 0.0, True)
+        fall_surf = AssetGenerator._render_character_frame(pal, -2, -2, 2, False, 0.0, True, False, 0)
         sheet.blit(fall_surf, (14 * fw, 0))
         frames_meta["fall"] = {"x": 14 * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
-        jump_surf = AssetGenerator._render_character_frame(pal, 2, 2, -1, False, 0.0, False)
+        jump_surf = AssetGenerator._render_character_frame(pal, 2, 2, -1, False, 0.0, False, False, 0)
         sheet.blit(jump_surf, (15 * fw, 0))
         frames_meta["jump"] = {"x": 15 * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
+        for i in range(4):
+            climb_phase = i / 3.0
+            frame_surf = AssetGenerator._render_character_frame(pal, 0, 0, 0, False, 0.0, False, True, climb_phase)
+            idx = 16 + i
+            sheet.blit(frame_surf, (idx * fw, 0))
+            frames_meta[f"climb_{i}"] = {"x": idx * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
         pygame.image.save(sheet, f"assets/spritesheets/player_{skin_id}.png")
         meta = {
             "texture": f"player_{skin_id}.png",
@@ -176,7 +182,7 @@ class AssetGenerator:
             json.dump(meta, f, indent=2)
 
     @staticmethod
-    def _render_character_frame(pal, bob, l_leg, r_leg, is_digging, dig_phase, is_falling):
+    def _render_character_frame(pal, bob, l_leg, r_leg, is_digging, dig_phase, is_falling, is_climbing, climb_phase):
         fw = TILE_SIZE + 8
         fh = TILE_SIZE + 4
         surf = pygame.Surface((fw, fh), pygame.SRCALPHA)
@@ -185,6 +191,54 @@ class AssetGenerator:
         base_y = oy + 8 - bob
         leg_l_x = ox + 5
         leg_r_x = ox + 11
+
+        if is_climbing:
+            climb_bob = int(math.sin(climb_phase * math.pi * 2) * 1)
+            l_off = int(math.sin(climb_phase * math.pi * 2) * 3)
+            r_off = -l_off
+            pygame.draw.rect(surf, PAL_OUTLINE, (leg_l_x + l_off, oy + 14, 4, 6))
+            pygame.draw.rect(surf, (34, 42, 64), (leg_l_x + l_off + 1, oy + 15, 2, 4))
+            pygame.draw.rect(surf, PAL_OUTLINE, (leg_l_x + l_off, oy + 18, 5, 2))
+            pygame.draw.rect(surf, PAL_OUTLINE, (leg_r_x + r_off, oy + 14, 4, 6))
+            pygame.draw.rect(surf, (34, 42, 64), (leg_r_x + r_off + 1, oy + 15, 2, 4))
+            pygame.draw.rect(surf, PAL_OUTLINE, (leg_r_x + r_off, oy + 18, 5, 2))
+            pack_x = ox + 2
+            pygame.draw.rect(surf, PAL_OUTLINE, (pack_x, base_y + 3, 4, 7), border_radius=1)
+            pygame.draw.rect(surf, (138, 76, 38), (pack_x + 1, base_y + 4, 2, 5))
+            pygame.draw.rect(surf, PAL_OUTLINE, (ox + 4, base_y + 3, 12, 8), border_radius=3)
+            pygame.draw.rect(surf, pal["suit_main"], (ox + 5, base_y + 4, 10, 6), border_radius=2)
+            pygame.draw.rect(surf, pal["suit_dark"], (ox + 6, base_y + 7, 8, 3))
+            pygame.draw.rect(surf, (255, 205, 50), (ox + 9, base_y + 5, 2, 3))
+            pygame.draw.rect(surf, PAL_OUTLINE, (ox + 4, base_y - 1, 12, 6), border_radius=2)
+            pygame.draw.rect(surf, pal["skin"], (ox + 5, base_y, 10, 4), border_radius=1)
+            eye_x = ox + 10
+            pygame.draw.rect(surf, (255, 255, 255), (eye_x, base_y + 1, 3, 3))
+            pygame.draw.rect(surf, PAL_OUTLINE, (eye_x + 1, base_y + 1, 2, 2))
+            pygame.draw.rect(surf, PAL_OUTLINE, (ox + 3, base_y - 5, 14, 6), border_radius=3)
+            pygame.draw.rect(surf, pal["helmet_main"], (ox + 4, base_y - 4, 12, 4), border_radius=2)
+            pygame.draw.rect(surf, pal["helmet_light"], (ox + 6, base_y - 4, 6, 2))
+            lamp_x = ox + 13
+            pygame.draw.rect(surf, PAL_OUTLINE, (lamp_x, base_y - 3, 4, 4), border_radius=1)
+            pygame.draw.rect(surf, (255, 255, 220), (lamp_x + 1, base_y - 2, 2, 2))
+            swing = math.sin(climb_phase * math.pi)
+            arm_x = ox + 12
+            arm_y = base_y + 5
+            angle = -80 + 80 * swing
+            rad = math.radians(angle)
+            handle_len = 10
+            tip_x = arm_x + int(math.cos(rad) * handle_len)
+            tip_y = arm_y + int(math.sin(rad) * handle_len)
+            pygame.draw.line(surf, (130, 80, 40), (arm_x, arm_y), (tip_x, tip_y), 2)
+            head_rad = rad + math.pi / 2
+            hx1 = tip_x + int(math.cos(head_rad) * 4)
+            hy1 = tip_y + int(math.sin(head_rad) * 4)
+            hx2 = tip_x - int(math.cos(head_rad) * 4)
+            hy2 = tip_y - int(math.sin(head_rad) * 4)
+            pygame.draw.line(surf, PAL_OUTLINE, (hx1, hy1), (hx2, hy2), 3)
+            pygame.draw.line(surf, (190, 205, 225), (hx1, hy1), (hx2, hy2), 2)
+            pygame.draw.circle(surf, (255, 255, 255), (hx1, hy1), 1)
+            return surf
+
         pygame.draw.rect(surf, PAL_OUTLINE, (leg_l_x + l_leg, oy + 14, 4, 6))
         pygame.draw.rect(surf, (34, 42, 64), (leg_l_x + l_leg + 1, oy + 15, 2, 4))
         pygame.draw.rect(surf, PAL_OUTLINE, (leg_l_x + l_leg, oy + 18, 5, 2))
