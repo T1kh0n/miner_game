@@ -9,14 +9,10 @@ class AssetGenerator:
     def generate_all():
         os.makedirs("assets/spritesheets", exist_ok=True)
         os.makedirs("assets/data", exist_ok=True)
-        if not os.path.exists("assets/spritesheets/tiles.png"):
-            AssetGenerator.generate_tiles()
-        if not os.path.exists("assets/spritesheets/coin.png"):
-            AssetGenerator.generate_coin()
+        AssetGenerator.generate_tiles()
+        AssetGenerator.generate_coin()
         for skin_id, palette in SKIN_PALETTES.items():
-            sheet_path = f"assets/spritesheets/player_{skin_id}.png"
-            if not os.path.exists(sheet_path):
-                AssetGenerator.generate_player_skin(skin_id, palette)
+            AssetGenerator.generate_player_skin(skin_id, palette)
 
     @staticmethod
     def generate_tiles():
@@ -61,6 +57,18 @@ class AssetGenerator:
         for c, (px, py), sz in pebbles:
             pygame.draw.rect(dirt, c, (px, py, sz, sz))
         pygame.draw.rect(dirt, (64, 34, 16), (0, 0, TILE_SIZE, TILE_SIZE), 1)
+        stone = pygame.Surface((TILE_SIZE, TILE_SIZE))
+        stone.fill((82, 86, 98))
+        pygame.draw.rect(stone, (105, 110, 125), (1, 1, TILE_SIZE - 2, TILE_SIZE - 2))
+        pygame.draw.rect(stone, (125, 132, 148), (2, 2, 7, 6))
+        pygame.draw.rect(stone, (95, 100, 115), (10, 3, 7, 5))
+        pygame.draw.rect(stone, (70, 74, 88), (3, 10, 6, 7))
+        pygame.draw.rect(stone, (115, 120, 138), (11, 10, 6, 7))
+        pygame.draw.rect(stone, (150, 158, 175), (3, 3, 4, 2))
+        pygame.draw.rect(stone, (140, 148, 165), (12, 11, 3, 2))
+        pygame.draw.rect(stone, PAL_OUTLINE, (0, 0, TILE_SIZE, TILE_SIZE), 1)
+        pygame.draw.line(stone, PAL_OUTLINE, (0, 9), (TILE_SIZE, 9), 1)
+        pygame.draw.line(stone, PAL_OUTLINE, (9, 0), (9, 9), 1)
         rock = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
         cx, cy = 10, 10
         pygame.draw.circle(rock, PAL_OUTLINE, (cx, cy), 9)
@@ -74,7 +82,10 @@ class AssetGenerator:
         sheet.blit(wall_surface, (TILE_SIZE, 0))
         sheet.blit(dirt, (TILE_SIZE * 2, 0))
         sheet.blit(rock, (TILE_SIZE * 3, 0))
-        pygame.image.save(sheet, "assets/spritesheets/tiles.png")
+        sheet_wide = pygame.Surface((TILE_SIZE * 5, TILE_SIZE), pygame.SRCALPHA)
+        sheet_wide.blit(sheet, (0, 0))
+        sheet_wide.blit(stone, (TILE_SIZE * 4, 0))
+        pygame.image.save(sheet_wide, "assets/spritesheets/tiles.png")
         meta = {
             "texture": "tiles.png",
             "frame_width": TILE_SIZE,
@@ -83,7 +94,8 @@ class AssetGenerator:
                 "wall_under": {"x": 0, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
                 "wall_surface": {"x": TILE_SIZE, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
                 "dirt": {"x": TILE_SIZE * 2, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
-                "rock": {"x": TILE_SIZE * 3, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]}
+                "rock": {"x": TILE_SIZE * 3, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
+                "stone": {"x": TILE_SIZE * 4, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]}
             }
         }
         with open("assets/data/tiles.json", "w", encoding="utf-8") as f:
@@ -154,8 +166,7 @@ class AssetGenerator:
             sheet.blit(frame_surf, (idx * fw, 0))
             frames_meta[f"dig_{i}"] = {"x": idx * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
         for i in range(2):
-            idle_bob = i
-            frame_surf = AssetGenerator._render_character_frame(pal, idle_bob, 0, 0, False, 0.0, False, False, 0)
+            frame_surf = AssetGenerator._render_character_frame(pal, 0, 0, 0, False, 0.0, False, False, 0)
             idx = 12 + i
             sheet.blit(frame_surf, (idx * fw, 0))
             frames_meta[f"idle_{i}"] = {"x": idx * fw, "y": 0, "w": fw, "h": fh, "pivot": [0.5, 0.5]}
