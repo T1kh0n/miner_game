@@ -12,6 +12,7 @@ from engine.entities import Player, RockEntity, Particle, ParticlePool, CabinEnt
 from engine.asset_manager import AssetManager
 from engine.ui import UIButton, UILabel, UIPanel, UINode
 from core.camera import Camera
+from core.localization import LocalizationManager
 from core.save_system import (
     SaveManager, SaveSlotDTO, PlayerStateDTO, WorldStateDTO,
     ProgressionDTO, Vector2DTO, InventoryItemDTO, MinedTileDTO, RockStateDTO
@@ -19,15 +20,21 @@ from core.save_system import (
 from states.state_machine import State
 
 class TutorialSystem:
-    def __init__(self, font: pygame.font.Font) -> None:
+    def __init__(self, font: pygame.font.Font, loc: LocalizationManager) -> None:
         self.font = font
+        self.loc = loc
         self.hints = []
-        self.fired = set()
+        self.fired: set[str] = set()
 
-    def fire(self, key: str, text: str) -> None:
+    def fire(self, key: str, default_text: str = "") -> None:
         if key not in self.fired:
             self.fired.add(key)
-            self.hints.append({"text": text, "life": 240, "max_life": 240})
+            text = self.loc.get_text(f"hint_{key}", default_text if default_text else key)
+            self.hints.append({"key": key, "text": text, "life": 240, "max_life": 240})
+
+    def refresh_strings(self) -> None:
+        for h in self.hints:
+            h["text"] = self.loc.get_text(f"hint_{h['key']}", h["text"])
 
     def update(self) -> None:
         for h in self.hints[:]:
@@ -57,8 +64,9 @@ class TutorialSystem:
 class PlayState(State):
     def __init__(self, manager) -> None:
         super().__init__(manager)
-        self.font = pygame.font.Font(None, 16)
-        self.font_big = pygame.font.Font(None, 22)
+        self.loc = LocalizationManager.get()
+        self.font = self.loc.get_font(15)
+        self.font_big = self.loc.get_font(20)
         self.world_w = GRID_W * TILE_SIZE
         self.world_h = GRID_H * TILE_SIZE
 
@@ -83,35 +91,79 @@ class PlayState(State):
         self.particles = self.particle_pool.particles
         self.cabins: list[CabinEntity] = []
         self._setup_end_panels()
+        self.loc.subscribe(self._refresh_strings)
 
     def _setup_end_panels(self) -> None:
         canvas_rect = pygame.Rect(0, 0, CANVAS_W, CANVAS_H)
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
 
         self.panel_over = UIPanel(0.5, 0.5, 190, 84, border_color=COLOR_DANGER)
-        self.death_label = UILabel(0.5, 0.28, "ОБВАЛ В ШАХТЕ", self.font_big, COLOR_DANGER)
+        self.death_label = UILabel(0.5, 0.28, self.loc.get_text("death_cave_in", "CAVE-IN COLLAPSE"), self.font_big, COLOR_DANGER)
         self.panel_over.add_child(self.death_label)
-        self.panel_over.add_child(UIButton(0.25, 0.75, 68, 20, "ЗАНОВО", self.font, self.respawn_at_checkpoint))
-        self.panel_over.add_child(UIButton(0.75, 0.75, 68, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
+        self.btn_over_restart = UIButton(0.25, 0.75, 68, 20, self.loc.get_text("btn_restart", "RESTART"), self.font, self.respawn_at_checkpoint)
+        self.panel_over.add_child(self.btn_over_restart)
+        self.btn_over_menu = UIButton(0.75, 0.75, 68, 20, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
+        self.panel_over.add_child(self.btn_over_menu)
         self.panel_over.visible = False
         self.root.add_child(self.panel_over)
 
         self.panel_won = UIPanel(0.5, 0.5, 190, 84, border_color=COLOR_SUCCESS)
-        self.panel_won.add_child(UILabel(0.5, 0.28, "ПОБЕДА!", self.font_big, COLOR_SUCCESS))
-        self.panel_won.add_child(UIButton(0.25, 0.75, 68, 20, "ЗАНОВО", self.font, self.enter))
-        self.panel_won.add_child(UIButton(0.75, 0.75, 68, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
+        self.lbl_won = UILabel(0.5, 0.28, self.loc.get_text("win_title", "VICTORY!"), self.font_big, COLOR_SUCCESS)
+        self.panel_won.add_child(self.lbl_won)
+        self.btn_won_restart = UIButton(0.25, 0.75, 68, 20, self.loc.get_text("btn_restart", "RESTART"), self.font, self.enter)
+        self.panel_won.add_child(self.btn_won_restart)
+        self.btn_won_menu = UIButton(0.75, 0.75, 68, 20, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
+        self.panel_won.add_child(self.btn_won_menu)
         self.panel_won.visible = False
         self.root.add_child(self.panel_won)
 
-        self.panel_pause = UIPanel(0.5, 0.5, 190, 100, border_color=(100, 150, 255))
-        self.panel_pause.add_child(UILabel(0.5, 0.2, "ПАУЗА", self.font_big, (100, 150, 255)))
-        self.panel_pause.add_child(UIButton(0.5, 0.5, 140, 20, "ПРОДОЛЖИТЬ", self.font, self._unpause))
-        self.panel_pause.add_child(UIButton(0.25, 0.8, 68, 20, "ЗАНОВО", self.font, self.enter))
-        self.panel_pause.add_child(UIButton(0.75, 0.8, 68, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
+        self.panel_pause = UIPanel(0.5, 0.5, 190, 134, border_color=(100, 150, 255))
+        self.lbl_pause = UILabel(0.5, 0.12, self.loc.get_text("pause_title", "PAUSED"), self.font_big, (100, 150, 255))
+        self.panel_pause.add_child(self.lbl_pause)
+        self.btn_pause_resume = UIButton(0.5, 0.32, 140, 20, self.loc.get_text("btn_resume", "RESUME"), self.font, self._unpause)
+        self.panel_pause.add_child(self.btn_pause_resume)
+        self.btn_pause_lang = UIButton(0.5, 0.51, 140, 20, self.loc.get_text("ui_lang", "LANG: EN"), self.font, self._toggle_lang)
+        self.panel_pause.add_child(self.btn_pause_lang)
+        self.btn_pause_hints = UIButton(0.5, 0.70, 140, 20, self.loc.get_text("btn_reset_hints", "RESET HINTS"), self.font, self._reset_hints)
+        self.panel_pause.add_child(self.btn_pause_hints)
+        self.btn_pause_restart = UIButton(0.25, 0.88, 68, 20, self.loc.get_text("btn_restart", "RESTART"), self.font, self.enter)
+        self.panel_pause.add_child(self.btn_pause_restart)
+        self.btn_pause_menu = UIButton(0.75, 0.88, 68, 20, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
+        self.panel_pause.add_child(self.btn_pause_menu)
         self.panel_pause.visible = False
         self.root.add_child(self.panel_pause)
 
         self.root.layout(canvas_rect)
+
+    def _toggle_lang(self) -> None:
+        self.loc.toggle_locale()
+        self._refresh_strings()
+
+    def _reset_hints(self) -> None:
+        if hasattr(self, "tutorial"):
+            self.tutorial.fired.clear()
+            self.tutorial.hints.clear()
+            self.tutorial.fire("reset_done", self.loc.get_text("hints_reset_done", "Tutorial hints have been reset."))
+        if self.last_checkpoint_snapshot is not None:
+            self.last_checkpoint_snapshot.progression.seen_hints = []
+            self.save_manager.save_slot(self.active_slot_index, self.last_checkpoint_snapshot)
+
+    def _refresh_strings(self) -> None:
+        self.btn_over_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
+        self.btn_over_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
+        self.lbl_won.set_text(self.loc.get_text("win_title", "VICTORY!"))
+        self.btn_won_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
+        self.btn_won_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
+        self.lbl_pause.set_text(self.loc.get_text("pause_title", "PAUSED"))
+        self.btn_pause_resume.set_text(self.loc.get_text("btn_resume", "RESUME"))
+        self.btn_pause_lang.set_text(self.loc.get_text("ui_lang", "LANG: EN"))
+        self.btn_pause_hints.set_text(self.loc.get_text("btn_reset_hints", "RESET HINTS"))
+        self.btn_pause_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
+        self.btn_pause_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
+        if hasattr(self, "player") and hasattr(self.player, "death_key") and self.player.death_key:
+            self.death_label.set_text(self.loc.get_text(self.player.death_key, "CAVE-IN COLLAPSE"))
+        if hasattr(self, "tutorial"):
+            self.tutorial.refresh_strings()
 
     def _unpause(self) -> None:
         self.paused = False
@@ -153,8 +205,8 @@ class PlayState(State):
         self.rocks = []
         self.tile_shapes = {}
 
-        self.tutorial = TutorialSystem(self.font)
-        self.tutorial.fire("start", "WASD / Arrows: Move  |  Space: Jump  |  Shift: Climb")
+        self.tutorial = TutorialSystem(self.font, self.loc)
+        self.tutorial.fire("start", "WASD / Arrows: Move  |  Space: Jump  |  Shift: Climb  |  E: Cabin")
 
         self.cabins = [CabinEntity(cid, cx, cy) for cx, cy, cid in self.level.cabin_locations]
 
@@ -185,6 +237,7 @@ class PlayState(State):
         skin = getattr(self.manager, "selected_skin", "classic")
         spawn_x, spawn_y = self.level.spawn_x, self.level.spawn_y
         self.player = Player(spawn_x, spawn_y, skin, self.space)
+        self.player.death_key = "death_cave_in"
 
         rock_map = {r.shape: r for r in self.rocks}
 
@@ -206,9 +259,10 @@ class PlayState(State):
                     p.is_dead = True
                     n = arbiter.contact_point_set.normal
                     if abs(n.x) > abs(n.y):
-                        p.death_reason = "РАЗМАЗАЛО О СТЕНУ"
+                        p.death_key = "death_wall"
                     else:
-                        p.death_reason = "РАЗДАВИЛО КАМНЕМ"
+                        p.death_key = "death_rock"
+                    p.death_reason = data["loc"].get_text(p.death_key, "CRUSHED")
                     data["camera"].add_shake(8.0, 20)
                     data["emit"](p.body.position.x, p.body.position.y, [(255, 60, 60), (255, 180, 40)], 25)
 
@@ -219,9 +273,10 @@ class PlayState(State):
                     p.is_dead = True
                     n = arbiter.contact_point_set.normal
                     if abs(n.x) > abs(n.y):
-                        p.death_reason = "РАЗМАЗАЛО О СТЕНУ"
+                        p.death_key = "death_wall"
                     else:
-                        p.death_reason = "РАЗДАВИЛО КАМНЕМ"
+                        p.death_key = "death_rock"
+                    p.death_reason = data["loc"].get_text(p.death_key, "CRUSHED")
                     data["camera"].add_shake(8.0, 20)
                     data["emit"](p.body.position.x, p.body.position.y, [(255, 60, 60), (255, 180, 40)], 25)
 
@@ -229,12 +284,14 @@ class PlayState(State):
             "player": self.player,
             "camera": self.camera,
             "emit": self.emit_particles,
-            "rock_map": rock_map
+            "rock_map": rock_map,
+            "loc": self.loc
         }
         wall_data = {
             "player": self.player,
             "camera": self.camera,
-            "emit": self.emit_particles
+            "emit": self.emit_particles,
+            "loc": self.loc
         }
         self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=player_rock_data)
         self.space.on_collision(3, 1, post_solve=post_solve_wall, data=wall_data)
@@ -285,7 +342,7 @@ class PlayState(State):
                 if (dig_x, dig_y) in self.tile_shapes:
                     self.space.remove(self.tile_shapes[(dig_x, dig_y)])
                     del self.tile_shapes[(dig_x, dig_y)]
-                self.tutorial.fire("dig", "Dirt cleared! Watch for falling rocks above.")
+                self.tutorial.fire("mine_dirt", "Dirt cleared! Watch for falling rocks above.")
                 return True
         return False
 
@@ -328,6 +385,7 @@ class PlayState(State):
 
         snap = self.last_checkpoint_snapshot
         self.player.is_dead = False
+        self.player.death_key = ""
         self.player.death_reason = ""
         self.player.health = snap.player.health
         self.player.stamina = snap.player.stamina
@@ -405,10 +463,10 @@ class PlayState(State):
                             self.tutorial.fire("checkpoint", "Checkpoint saved! Progress secured.")
 
             if (self.player.on_wall_l or self.player.on_wall_r) and not self.player.on_ground:
-                self.tutorial.fire("wall_contact", "Press Shift to climb or grab the wall!")
+                self.tutorial.fire("first_wall", "Press Shift to climb or grab the wall!")
 
             if self.player.is_climbing:
-                self.tutorial.fire("climb", "Climbing uses stamina. Rest on ground to recover!")
+                self.tutorial.fire("climb_stamina", "Climbing uses stamina. Rest on ground to recover!")
 
             if not self.player.is_dead and not self.player.is_climbing:
                 px = self.player.body.position.x
@@ -449,7 +507,9 @@ class PlayState(State):
         if self.player.is_dead:
             self.game_over = True
             self.panel_over.visible = True
-            if hasattr(self.player, 'death_reason'):
+            if hasattr(self.player, 'death_key') and self.player.death_key:
+                self.death_label.set_text(self.loc.get_text(self.player.death_key, "CAVE-IN COLLAPSE"))
+            elif hasattr(self.player, 'death_reason'):
                 self.death_label.set_text(self.player.death_reason)
             if not self.recorded_score:
                 depth = int(self.player.body.position.y // TILE_SIZE)
@@ -587,27 +647,32 @@ class PlayState(State):
         pygame.draw.line(self.panel_surface, (255, 200, 60), (0, PANEL_HEIGHT - 2), (CANVAS_W, PANEL_HEIGHT - 2), 2)
         pygame.draw.line(self.panel_surface, PAL_OUTLINE, (0, PANEL_HEIGHT - 1), (CANVAS_W, PANEL_HEIGHT - 1), 1)
 
-        score_surf = self.font.render(f"SCORE:{self.score}", True, COLOR_GOLD)
+        score_lbl = self.loc.get_text("ui_score", "SCORE")
+        score_surf = self.font.render(f"{score_lbl}:{self.score}", True, COLOR_GOLD)
         self.panel_surface.blit(score_surf, (6, 5))
 
+        depth_lbl = self.loc.get_text("ui_depth", "DEPTH")
         depth_val = max(0, int((self.player.body.position.y - 60.0) // TILE_SIZE))
-        depth_surf = self.font.render(f"DEPTH:{depth_val}m", True, COLOR_TEXT)
+        depth_surf = self.font.render(f"{depth_lbl}:{depth_val}m", True, COLOR_TEXT)
         self.panel_surface.blit(depth_surf, (6, 17))
 
-        coins_surf = self.font.render(f"COINS:{self.coins_left}", True, COLOR_TEXT)
+        coins_lbl = self.loc.get_text("ui_coins", "COINS")
+        coins_surf = self.font.render(f"{coins_lbl}:{self.coins_left}", True, COLOR_TEXT)
         cx_pos = CANVAS_W // 2 - coins_surf.get_width() // 2
         self.panel_surface.blit(coins_surf, (cx_pos, 5))
 
         bar_x = CANVAS_W - 68
         bar_w = 60
 
-        hp_label = self.font.render("HP", True, COLOR_TEXT)
+        hp_txt = self.loc.get_text("ui_hp", "HP")
+        hp_label = self.font.render(hp_txt, True, COLOR_TEXT)
         self.panel_surface.blit(hp_label, (bar_x - hp_label.get_width() - 3, 5))
         pygame.draw.rect(self.panel_surface, (100, 20, 20), (bar_x, 5, bar_w, 8))
         pygame.draw.rect(self.panel_surface, (250, 40, 40), (bar_x, 5, int(bar_w * max(0.0, self.player.health / 100.0)), 8))
         pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 5, bar_w, 8), 1)
 
-        st_label = self.font.render("ST", True, COLOR_TEXT)
+        st_txt = self.loc.get_text("ui_st", "ST")
+        st_label = self.font.render(st_txt, True, COLOR_TEXT)
         self.panel_surface.blit(st_label, (bar_x - st_label.get_width() - 3, 17))
         pygame.draw.rect(self.panel_surface, (20, 80, 20), (bar_x, 17, bar_w, 8))
         pygame.draw.rect(self.panel_surface, (40, 200, 40), (bar_x, 17, int(bar_w * max(0.0, self.player.stamina / 100.0)), 8))

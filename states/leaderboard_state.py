@@ -1,30 +1,43 @@
 import pygame
 from core.config import CANVAS_W, CANVAS_H, COLOR_TEXT, COLOR_GOLD
+from core.localization import LocalizationManager
 from engine.ui import UIPanel, UIButton, UILabel, UINode
 from states.state_machine import State
 
 class LeaderboardState(State):
-    def __init__(self, manager):
+    def __init__(self, manager) -> None:
         super().__init__(manager)
-        self.font_large = pygame.font.Font(None, 24)
-        self.font_small = pygame.font.Font(None, 16)
+        self.loc = LocalizationManager.get()
+        self.font_large = self.loc.get_font(22)
+        self.font_small = self.loc.get_font(15)
 
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
         self.panel = UIPanel(0.5, 0.5, 230, 200)
         self.root.add_child(self.panel)
 
-        self.panel.add_child(UILabel(0.5, 0.1, "ЗАЛ СЛАВЫ", self.font_large, COLOR_GOLD))
-        self.panel.add_child(UIButton(0.5, 0.9, 90, 20, "МЕНЮ", self.font_small, lambda: self.manager.change("menu")))
+        self.title_lbl = UILabel(0.5, 0.1, self.loc.get_text("leaderboard_title", "HALL OF FAME"), self.font_large, COLOR_GOLD)
+        self.panel.add_child(self.title_lbl)
+
+        self.btn_menu = UIButton(0.5, 0.9, 90, 20, self.loc.get_text("btn_menu", "MENU"), self.font_small, lambda: self.manager.change("menu"))
+        self.panel.add_child(self.btn_menu)
 
         self.root.layout(pygame.Rect(0, 0, CANVAS_W, CANVAS_H))
+        self.loc.subscribe(self._refresh_strings)
 
-    def handle_event(self, event, mouse_pos):
+    def _refresh_strings(self) -> None:
+        self.title_lbl.set_text(self.loc.get_text("leaderboard_title", "HALL OF FAME"))
+        self.btn_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
+
+    def enter(self) -> None:
+        self._refresh_strings()
+
+    def handle_event(self, event: pygame.event.Event, mouse_pos: tuple[int, int]) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self.root.update(mouse_pos, True)
         else:
             self.root.update(mouse_pos, False)
 
-    def render(self, surface):
+    def render(self, surface: pygame.Surface) -> None:
         surface.fill((16, 20, 28))
         self.root.render(surface)
         records = self.manager.leaderboard.entries

@@ -2,7 +2,7 @@ import pygame
 from core.config import PAL_OUTLINE, COLOR_TEXT, COLOR_GOLD
 
 class UINode:
-    def __init__(self, rx, ry, rw, rh, ax=0.5, ay=0.5):
+    def __init__(self, rx: float, ry: float, rw: float, rh: float, ax: float = 0.5, ay: float = 0.5) -> None:
         self.rx = rx
         self.ry = ry
         self.rw = rw
@@ -10,11 +10,11 @@ class UINode:
         self.ax = ax
         self.ay = ay
         self.rect = pygame.Rect(0, 0, 0, 0)
-        self.children = []
+        self.children: list["UINode"] = []
         self.visible = True
         self.parent_w = 0
 
-    def layout(self, prect):
+    def layout(self, prect: pygame.Rect) -> None:
         w = self.rw * prect.w if isinstance(self.rw, float) else self.rw
         h = self.rh * prect.h if isinstance(self.rh, float) else self.rh
         cx = prect.x + self.rx * prect.w
@@ -27,33 +27,33 @@ class UINode:
             c.parent_w = self.rect.width
             c.layout(self.rect)
 
-    def update(self, mp, clk):
+    def update(self, mp: tuple[int, int], clk: bool) -> None:
         if not self.visible:
             return
         for c in self.children:
             c.update(mp, clk)
 
-    def render(self, surf):
+    def render(self, surf: pygame.Surface) -> None:
         if not self.visible:
             return
         for c in self.children:
             c.render(surf)
 
-    def add_child(self, child):
+    def add_child(self, child: "UINode") -> None:
         self.children.append(child)
 
 class UILabel(UINode):
-    def __init__(self, rx, ry, text, font, color=COLOR_TEXT, max_width=None):
+    def __init__(self, rx: float, ry: float, text: str, font: pygame.font.Font, color: tuple[int, int, int] = COLOR_TEXT, max_width: int | None = None) -> None:
         super().__init__(rx, ry, 0, 0)
         self.text = text
         self.font = font
         self.color = color
         self.max_width = max_width
 
-    def set_text(self, text):
+    def set_text(self, text: str) -> None:
         self.text = text
 
-    def render(self, surf):
+    def render(self, surf: pygame.Surface) -> None:
         if not self.visible:
             return
         ts = self.font.render(str(self.text), True, self.color)
@@ -70,7 +70,7 @@ class UILabel(UINode):
         super().render(surf)
 
 class UIButton(UINode):
-    def __init__(self, rx, ry, rw, rh, text, font, callback=None, accent=COLOR_GOLD):
+    def __init__(self, rx: float, ry: float, rw: float, rh: float, text: str, font: pygame.font.Font, callback=None, accent: tuple[int, int, int] = COLOR_GOLD) -> None:
         super().__init__(rx, ry, rw, rh)
         self.text = text
         self.font = font
@@ -78,7 +78,10 @@ class UIButton(UINode):
         self.accent = accent
         self.hovered = False
 
-    def update(self, mp, clk):
+    def set_text(self, text: str) -> None:
+        self.text = text
+
+    def update(self, mp: tuple[int, int], clk: bool) -> None:
         if not self.visible:
             return
         self.hovered = self.rect.collidepoint(mp)
@@ -86,7 +89,7 @@ class UIButton(UINode):
             self.callback()
         super().update(mp, clk)
 
-    def render(self, surf):
+    def render(self, surf: pygame.Surface) -> None:
         if not self.visible:
             return
         bg_col = (48, 56, 74) if not self.hovered else (68, 80, 104)
@@ -106,12 +109,12 @@ class UIButton(UINode):
         super().render(surf)
 
 class UIPanel(UINode):
-    def __init__(self, rx, ry, rw, rh, bg_color=(28, 34, 48), border_color=COLOR_GOLD):
+    def __init__(self, rx: float, ry: float, rw: float, rh: float, bg_color: tuple[int, int, int] = (28, 34, 48), border_color: tuple[int, int, int] = COLOR_GOLD) -> None:
         super().__init__(rx, ry, rw, rh)
         self.bg_color = bg_color
         self.border_color = border_color
 
-    def render(self, surf):
+    def render(self, surf: pygame.Surface) -> None:
         if not self.visible:
             return
         pygame.draw.rect(surf, PAL_OUTLINE, self.rect.inflate(4, 4), border_radius=8)
