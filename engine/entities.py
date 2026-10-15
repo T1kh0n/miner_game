@@ -5,22 +5,22 @@ from core.config import TILE_SIZE
 from engine.asset_manager import AssetManager
 
 class Particle:
-    def __init__(self, x, y, vx, vy, color, life, size=2):
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
+    def __init__(self, x: float, y: float, vx: float, vy: float, color: tuple[int, int, int], life: int, size: int = 2) -> None:
+        self.x = float(x)
+        self.y = float(y)
+        self.vx = float(vx)
+        self.vy = float(vy)
         self.color = color
         self.life = life
         self.max_life = life
         self.size = size
 
-    def update(self):
+    def update(self) -> None:
         self.x += self.vx
         self.y += self.vy
         self.life -= 1
 
-    def render(self, surf, cam_x, cam_y):
+    def render(self, surf: pygame.Surface, cam_x: float, cam_y: float) -> None:
         if self.life > 0:
             alpha = int(255 * (self.life / self.max_life))
             ps = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
@@ -28,12 +28,15 @@ class Particle:
             surf.blit(ps, (int(self.x - cam_x) - self.size, int(self.y - cam_y) - self.size))
 
 class RockEntity:
-    def __init__(self, tx, ty, space):
+    def __init__(self, tx: int, ty: int, space: pymunk.Space) -> None:
         self.radius = 9.0
         mass = 10.0
         moment = pymunk.moment_for_circle(mass, 0, self.radius)
         self.body = pymunk.Body(mass, moment)
         self.body.position = (tx * TILE_SIZE + TILE_SIZE / 2.0, ty * TILE_SIZE + TILE_SIZE / 2.0)
+        self.prev_x = float(self.body.position.x)
+        self.prev_y = float(self.body.position.y)
+        self.prev_angle = float(self.body.angle)
         self.shape = pymunk.Circle(self.body, self.radius)
         self.shape.friction = 0.6
         self.shape.elasticity = 0.1
@@ -41,25 +44,38 @@ class RockEntity:
         space.add(self.body, self.shape)
         self._locked_velocity = None
 
-    def lock_velocity(self):
+    def save_previous_state(self) -> None:
+        self.prev_x = float(self.body.position.x)
+        self.prev_y = float(self.body.position.y)
+        self.prev_angle = float(self.body.angle)
+
+    def get_interpolated_pose(self, alpha: float) -> tuple[float, float, float]:
+        alpha = max(0.0, min(1.0, alpha))
+        ix = self.prev_x * (1.0 - alpha) + self.body.position.x * alpha
+        iy = self.prev_y * (1.0 - alpha) + self.body.position.y * alpha
+        iangle = self.prev_angle * (1.0 - alpha) + self.body.angle * alpha
+        return ix, iy, iangle
+
+    def lock_velocity(self) -> None:
         self._locked_velocity = (self.body.velocity.x, self.body.velocity.y)
 
-    def restore_velocity(self):
+    def restore_velocity(self) -> None:
         if self._locked_velocity is not None:
             self.body.velocity = self._locked_velocity
             self._locked_velocity = None
 
-    def render(self, surface, cam_x, cam_y, asset_mgr):
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager, alpha: float = 1.0) -> None:
         sprite = asset_mgr.get_sprite("tiles", "rock")
-        angle_deg = math.degrees(self.body.angle)
+        ix, iy, iangle = self.get_interpolated_pose(alpha)
+        angle_deg = math.degrees(iangle)
         rotated = pygame.transform.rotate(sprite, -angle_deg)
-        rx = int(self.body.position.x - cam_x)
-        ry = int(self.body.position.y - cam_y)
+        rx = int(ix - cam_x)
+        ry = int(iy - cam_y)
         rect = rotated.get_rect(center=(rx, ry))
         surface.blit(rotated, rect)
 
 class Player:
-    def __init__(self, x, y, skin_id, space):
+    def __init__(self, x: float, y: float, skin_id: str, space: pymunk.Space) -> None:
         self.skin_id = skin_id
 
         mgr = AssetManager.get()
@@ -86,6 +102,10 @@ class Player:
         self.dig_timer = 0
         self.climb_tick = 0
         self.anim_tick = 0
+        self.anim_time = 0.0
+        self.climb_time = 0.0
+        self.dig_time = 0.0
+        self.dig_duration = 0.2
         self.on_ground = False
         self.on_wall_l = False
         self.on_wall_r = False
@@ -97,28 +117,41 @@ class Player:
         mass = 5.0
         self.body = pymunk.Body(mass, float('inf'))
         self.body.position = (x, y)
+        self.prev_x = float(x)
+        self.prev_y = float(y)
         self.shape = pymunk.Poly.create_box(self.body, (self.w, self.h))
         self.shape.friction = 0.0
         self.shape.elasticity = 0.0
         self.shape.collision_type = 3
         space.add(self.body, self.shape)
 
-    def _get_current_frame_key(self):
+    def save_previous_state(self) -> None:
+        self.prev_x = float(self.body.position.x)
+        self.prev_y = float(self.body.position.y)
+
+    def get_interpolated_pos(self, alpha: float) -> tuple[float, float]:
+        alpha = max(0.0, min(1.0, alpha))
+        ix = self.prev_x * (1.0 - alpha) + self.body.position.x * alpha
+        iy = self.prev_y * (1.0 - alpha) + self.body.position.y * alpha
+        return ix, iy
+
+    def _get_current_frame_key(self) -> str:
         if self.is_climbing:
-            f_idx = (self.climb_tick // 6) % 4
+            f_idx = int(self.climb_time / 0.1) % 4
             return f"climb_{f_idx}"
         if self.is_digging:
-            f_idx = min(3, (12 - self.dig_timer) // 3)
+            progress = min(1.0, max(0.0, 1.0 - (self.dig_time / max(0.001, self.dig_duration))))
+            f_idx = min(3, int(progress * 4))
             return f"dig_{f_idx}"
         if not self.on_ground:
             return "jump" if self.body.velocity.y < 0 else "fall"
         if abs(self.body.velocity.x) > 10.0:
-            f_idx = (self.anim_tick // 4) % 8
+            f_idx = int(self.anim_time / 0.08) % 8
             return f"walk_{f_idx}"
-        f_idx = (self.anim_tick // 20) % 2
+        f_idx = int(self.anim_time / 0.35) % 2
         return f"idle_{f_idx}"
 
-    def update(self, up, down, left, right, jump, climb_held, dt, space, particle_emitter, camera):
+    def update(self, up: bool, down: bool, left: bool, right: bool, jump: bool, climb_held: bool, dt: float, space: pymunk.Space, particle_emitter, camera) -> None:
         if self.is_dead:
             return
 
@@ -188,46 +221,34 @@ class Player:
                 if up:
                     self.body.velocity = (self.body.velocity.x, -80.0)
                     self.stamina = max(0.0, self.stamina - 30.0 * dt)
-                    self.climb_tick += 1
+                    self.climb_time += dt
+                    self.climb_tick = int(self.climb_time * 60)
                 elif down:
                     self.body.velocity = (self.body.velocity.x, 60.0)
-                    self.climb_tick += 1
+                    self.climb_time += dt
+                    self.climb_tick = int(self.climb_time * 60)
                 else:
                     self.body.velocity = (self.body.velocity.x, 0.0)
                     self.stamina = max(0.0, self.stamina - 5.0 * dt)
             elif not self.on_ground and self.body.velocity.y > 0:
                 self.body.velocity = (self.body.velocity.x, self.body.velocity.y * 0.8)
 
-        self.anim_tick += 1
+        self.anim_time += dt
+        self.anim_tick = int(self.anim_time * 60)
         if self.is_climbing:
             self.is_digging = False
+            self.dig_time = 0.0
             self.dig_timer = 0
-        elif self.dig_timer > 0:
-            self.dig_timer -= 1
+        elif self.dig_time > 0.0:
+            self.dig_time = max(0.0, self.dig_time - dt)
+            self.dig_timer = int(self.dig_time * 60)
             self.is_digging = True
         else:
             self.is_digging = False
 
-        frame_key = self._get_current_frame_key()
-        mgr = AssetManager.get()
-        hw, hh = mgr.get_hitbox(f"player_{self.skin_id}", frame_key)
-        hw = max(8, hw)
-        hh = max(10, hh)
-        if hw != self.w or hh != self.h:
-            old_pos = self.body.position
-            space.remove(self.shape)
-            self.w = hw
-            self.h = hh
-            self.shape = pymunk.Poly.create_box(self.body, (self.w, self.h))
-            self.shape.friction = 0.0
-            self.shape.elasticity = 0.0
-            self.shape.collision_type = 3
-            space.add(self.shape)
-            self.body.position = old_pos
-
         self.prev_vy = self.body.velocity.y
 
-    def render(self, surface, cam_x, cam_y, asset_mgr):
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager, alpha: float = 1.0) -> None:
         if self.is_dead:
             return
         skin_bundle = f"player_{self.skin_id}"
@@ -249,6 +270,7 @@ class Player:
             sprite = pygame.transform.flip(sprite, True, False)
             ox = sprite_w - ox
 
-        rx = int(self.body.position.x - cam_x) - ox
-        ry = int(self.body.position.y - cam_y) - oy
+        ix, iy = self.get_interpolated_pos(alpha)
+        rx = int(ix - cam_x) - ox
+        ry = int(iy - cam_y) - oy
         surface.blit(sprite, (rx, ry))

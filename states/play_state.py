@@ -5,7 +5,7 @@ import math
 from core.config import (
     CANVAS_W, CANVAS_H, PANEL_HEIGHT, TILE_SIZE, GRID_W, GRID_H,
     COLOR_TEXT, COLOR_GOLD, COLOR_DANGER, COLOR_SUCCESS, PAL_OUTLINE,
-    WALL, DIRT, ROCK, COIN, EMPTY, STONE
+    WALL, DIRT, ROCK, COIN, EMPTY, STONE, FIXED_DT, MAX_ACCUMULATOR
 )
 from engine.level import Level
 from engine.entities import Player, RockEntity, Particle
@@ -15,23 +15,23 @@ from core.camera import Camera
 from states.state_machine import State
 
 class TutorialSystem:
-    def __init__(self, font):
+    def __init__(self, font: pygame.font.Font) -> None:
         self.font = font
         self.hints = []
         self.fired = set()
 
-    def fire(self, key, text):
+    def fire(self, key: str, text: str) -> None:
         if key not in self.fired:
             self.fired.add(key)
             self.hints.append({"text": text, "life": 240, "max_life": 240})
 
-    def update(self):
+    def update(self) -> None:
         for h in self.hints[:]:
             h["life"] -= 1
             if h["life"] <= 0:
                 self.hints.remove(h)
 
-    def render(self, surface):
+    def render(self, surface: pygame.Surface) -> None:
         y_pos = CANVAS_H - PANEL_HEIGHT - 16
         for h in self.hints:
             alpha = min(255, int(255 * (h["life"] / 30.0))) if h["life"] < 30 else 255
@@ -51,7 +51,7 @@ class TutorialSystem:
             y_pos -= ts.get_height() + 8
 
 class PlayState(State):
-    def __init__(self, manager):
+    def __init__(self, manager) -> None:
         super().__init__(manager)
         self.font = pygame.font.Font(None, 16)
         self.font_big = pygame.font.Font(None, 22)
@@ -67,9 +67,11 @@ class PlayState(State):
 
         self.camera = Camera(self.world_w, self.world_h)
         self._coin_ticks = 0
+        self.physics_accumulator = 0.0
+        self.render_alpha = 1.0
         self._setup_end_panels()
 
-    def _setup_end_panels(self):
+    def _setup_end_panels(self) -> None:
         canvas_rect = pygame.Rect(0, 0, CANVAS_W, CANVAS_H)
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
 
@@ -98,11 +100,11 @@ class PlayState(State):
 
         self.root.layout(canvas_rect)
 
-    def _unpause(self):
+    def _unpause(self) -> None:
         self.paused = False
         self.panel_pause.visible = False
 
-    def _make_light_mask(self, radius):
+    def _make_light_mask(self, radius: int) -> pygame.Surface:
         diam = radius * 2
         surf = pygame.Surface((diam, diam), pygame.SRCALPHA)
         for r in range(radius, 0, -1):
@@ -110,7 +112,7 @@ class PlayState(State):
             pygame.draw.circle(surf, (0, 0, 0, alpha), (radius, radius), r)
         return surf
 
-    def enter(self):
+    def enter(self) -> None:
         self.space = pymunk.Space()
         self.space.gravity = (0, 600)
         self.space.iterations = 20
@@ -123,6 +125,8 @@ class PlayState(State):
         self.paused = False
         self.recorded_score = False
         self._coin_ticks = 0
+        self.physics_accumulator = 0.0
+        self.render_alpha = 1.0
 
         self.panel_over.visible = False
         self.panel_won.visible = False
@@ -216,7 +220,7 @@ class PlayState(State):
         self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=player_rock_data)
         self.space.on_collision(3, 1, post_solve=post_solve_wall, data=wall_data)
 
-    def add_static_tile(self, tx, ty):
+    def add_static_tile(self, tx: int, ty: int) -> None:
         shape = pymunk.Poly(self.space.static_body, [
             (tx * TILE_SIZE, ty * TILE_SIZE),
             ((tx + 1) * TILE_SIZE, ty * TILE_SIZE),
@@ -228,7 +232,7 @@ class PlayState(State):
         self.space.add(shape)
         self.tile_shapes[(tx, ty)] = shape
 
-    def emit_particles(self, x, y, colors, count):
+    def emit_particles(self, x: float, y: float, colors: list[tuple[int, int, int]], count: int) -> None:
         for _ in range(count):
             ang = random.uniform(0, 6.28)
             spd = random.uniform(0.6, 2.2)
@@ -240,17 +244,18 @@ class PlayState(State):
                 random.randint(14, 24)
             ))
 
-    def _is_key(self, keys, code_en, char_ru_code):
+    def _is_key(self, keys, code_en: int, char_ru_code: int) -> bool:
         try:
-            return keys[code_en] or keys[char_ru_code]
+            return bool(keys[code_en] or keys[char_ru_code])
         except Exception:
-            return keys[code_en]
+            return bool(keys[code_en])
 
-    def _dig_tile(self, dig_x, dig_y):
+    def _dig_tile(self, dig_x: int, dig_y: int) -> bool:
         if 0 <= dig_x < GRID_W and 0 <= dig_y < GRID_H:
             if self.level.grid[dig_y][dig_x] == DIRT:
                 self.level.grid[dig_y][dig_x] = EMPTY
-                self.player.dig_timer = 12
+                self.player.dig_time = self.player.dig_duration
+                self.player.dig_timer = int(self.player.dig_duration * 60)
                 self.camera.add_shake(0.6, 3)
                 self.emit_particles(
                     dig_x * TILE_SIZE + TILE_SIZE // 2,
@@ -264,7 +269,7 @@ class PlayState(State):
                 return True
         return False
 
-    def handle_event(self, event, mouse_pos):
+    def handle_event(self, event: pygame.event.Event, mouse_pos: tuple[int, int]) -> None:
         clicked = (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1)
         self.root.update(mouse_pos, clicked)
 
@@ -277,11 +282,12 @@ class PlayState(State):
             if event.key in (pygame.K_r, 1082, 1050):
                 self.enter()
 
-    def update(self, dt):
+    def update(self, dt: float) -> None:
         if self.game_over or self.game_won or self.paused:
             return
 
         self._coin_ticks += int(dt * 1000)
+        self.physics_accumulator = min(self.physics_accumulator + dt, MAX_ACCUMULATOR)
 
         keys = pygame.key.get_pressed()
         up = self._is_key(keys, pygame.K_UP, 1094) or self._is_key(keys, pygame.K_w, 1094)
@@ -291,40 +297,48 @@ class PlayState(State):
         jump = keys[pygame.K_SPACE]
         climb_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
 
-        self.player.update(up, down, left, right, jump, climb_held, dt, self.space, self.emit_particles, self.camera)
+        while self.physics_accumulator >= FIXED_DT:
+            self.player.save_previous_state()
+            for rock in self.rocks:
+                rock.save_previous_state()
 
-        if (self.player.on_wall_l or self.player.on_wall_r) and not self.player.on_ground:
-            self.tutorial.fire("wall_contact", "Press Shift to climb or grab the wall!")
+            self.player.update(up, down, left, right, jump, climb_held, FIXED_DT, self.space, self.emit_particles, self.camera)
 
-        if self.player.is_climbing:
-            self.tutorial.fire("climb", "Climbing uses stamina. Rest on ground to recover!")
+            if (self.player.on_wall_l or self.player.on_wall_r) and not self.player.on_ground:
+                self.tutorial.fire("wall_contact", "Press Shift to climb or grab the wall!")
 
-        if not self.player.is_dead and not self.player.is_climbing:
-            px = self.player.body.position.x
-            py = self.player.body.position.y
-            hw = self.player.w / 2
-            hh = self.player.h / 2
+            if self.player.is_climbing:
+                self.tutorial.fire("climb", "Climbing uses stamina. Rest on ground to recover!")
 
-            if (jump and self.player.on_ground) or (self.player.body.velocity.y < -30.0):
-                above_y = int((py - hh - 2) // TILE_SIZE)
-                for test_x in [int((px - hw + 2) // TILE_SIZE), int((px + hw - 2) // TILE_SIZE)]:
-                    self._dig_tile(test_x, above_y)
+            if not self.player.is_dead and not self.player.is_climbing:
+                px = self.player.body.position.x
+                py = self.player.body.position.y
+                hw = self.player.w / 2
+                hh = self.player.h / 2
 
-            if up or down or left or right:
-                dig_x, dig_y = -1, -1
-                if down and self.player.on_ground:
-                    dig_x = int(px // TILE_SIZE)
-                    dig_y = int((py + hh + 2) // TILE_SIZE)
-                elif up and not self.player.on_ground:
-                    dig_x = int(px // TILE_SIZE)
-                    dig_y = int((py - hh - 2) // TILE_SIZE)
-                else:
-                    offset = hw + 2 if self.player.facing_right else -hw - 2
-                    dig_x = int((px + offset) // TILE_SIZE)
-                    dig_y = int(py // TILE_SIZE)
-                self._dig_tile(dig_x, dig_y)
+                if (jump and self.player.on_ground) or (self.player.body.velocity.y < -30.0):
+                    above_y = int((py - hh - 2) // TILE_SIZE)
+                    for test_x in [int((px - hw + 2) // TILE_SIZE), int((px + hw - 2) // TILE_SIZE)]:
+                        self._dig_tile(test_x, above_y)
 
-        self.space.step(dt)
+                if up or down or left or right:
+                    dig_x, dig_y = -1, -1
+                    if down and self.player.on_ground:
+                        dig_x = int(px // TILE_SIZE)
+                        dig_y = int((py + hh + 2) // TILE_SIZE)
+                    elif up and not self.player.on_ground:
+                        dig_x = int(px // TILE_SIZE)
+                        dig_y = int((py - hh - 2) // TILE_SIZE)
+                    else:
+                        offset = hw + 2 if self.player.facing_right else -hw - 2
+                        dig_x = int((px + offset) // TILE_SIZE)
+                        dig_y = int(py // TILE_SIZE)
+                    self._dig_tile(dig_x, dig_y)
+
+            self.space.step(FIXED_DT)
+            self.physics_accumulator -= FIXED_DT
+
+        self.render_alpha = self.physics_accumulator / FIXED_DT
         self.tutorial.update()
 
         if self.player.is_dead:
@@ -363,18 +377,19 @@ class PlayState(State):
                         self.manager.leaderboard.add_score(self.score, depth, self.player.skin_id)
                         self.recorded_score = True
 
-    def render(self, surface):
+    def render(self, surface: pygame.Surface) -> None:
+        interp_px, interp_py = self.player.get_interpolated_pos(self.render_alpha)
         if not self.paused:
             moving_down = (not self.player.on_ground and self.player.body.velocity.y > 60.0)
             cam_x, cam_y = self.camera.update(
-                self.player.body.position.x, self.player.body.position.y,
-                self.player.facing_right, moving_down
+                interp_px, interp_py,
+                self.player.facing_right, moving_down, FIXED_DT
             )
         else:
             cam_x, cam_y = self.camera.x, self.camera.y
         cam_x, cam_y = int(cam_x), int(cam_y)
 
-        depth_ratio = min(1.0, max(0.0, ((self.player.body.position.y - 60.0) / self.world_h) * 2.5))
+        depth_ratio = min(1.0, max(0.0, ((interp_py - 60.0) / self.world_h) * 2.5))
         for y in range(CANVAS_H - PANEL_HEIGHT):
             t = y / (CANVAS_H - PANEL_HEIGHT)
             cr = int((45 * (1.0 - depth_ratio) + 8 * depth_ratio) * (1.0 - t * 0.5))
@@ -407,10 +422,10 @@ class PlayState(State):
 
         asset_mgr = AssetManager.get()
         for rock in self.rocks:
-            rock.render(self.play_view, cam_x, cam_y, asset_mgr)
+            rock.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha)
         for p in self.particles:
             p.render(self.play_view, cam_x, cam_y)
-        self.player.render(self.play_view, cam_x, cam_y, asset_mgr)
+        self.player.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha)
 
         self.darkness_layer.fill((6, 8, 12, min(255, int(30 + depth_ratio * 225))))
         for y in range(start_row, end_row):
@@ -423,8 +438,8 @@ class PlayState(State):
                     )
 
         if not self.player.is_dead:
-            px = int(self.player.body.position.x - cam_x) - self.light_player.get_width() // 2
-            py = int(self.player.body.position.y - cam_y) - self.light_player.get_height() // 2
+            px = int(interp_px - cam_x) - self.light_player.get_width() // 2
+            py = int(interp_py - cam_y) - self.light_player.get_height() // 2
             self.darkness_layer.blit(self.light_player, (px, py), special_flags=pygame.BLEND_RGBA_SUB)
 
         self.play_view.blit(self.darkness_layer, (0, 0))
@@ -433,7 +448,7 @@ class PlayState(State):
         self.tutorial.render(surface)
         self.root.render(surface)
 
-    def _render_panel(self, surface):
+    def _render_panel(self, surface: pygame.Surface) -> None:
         for py in range(PANEL_HEIGHT):
             pt = py / PANEL_HEIGHT
             pygame.draw.line(

@@ -10,7 +10,7 @@ from states.skin_state import SkinState
 from states.leaderboard_state import LeaderboardState
 
 class MinerApp:
-    def __init__(self):
+    def __init__(self) -> None:
         pygame.init()
         pygame.display.set_caption("Miner Digger — Cavern Rolling Physics")
         info = pygame.display.Info()
@@ -33,7 +33,7 @@ class MinerApp:
         self.state_machine.add_state("leaderboard", LeaderboardState(self.state_machine))
         self.state_machine.change("menu")
 
-    def toggle_fullscreen(self):
+    def toggle_fullscreen(self) -> None:
         self.is_fullscreen = not self.is_fullscreen
         if self.is_fullscreen:
             self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -47,7 +47,7 @@ class MinerApp:
             self.screen = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE | pygame.DOUBLEBUF)
         self.screen = pygame.display.get_surface()
 
-    def get_viewport_rect(self):
+    def get_viewport_rect(self) -> pygame.Rect:
         cur_screen = pygame.display.get_surface()
         if cur_screen:
             self.screen = cur_screen
@@ -56,8 +56,13 @@ class MinerApp:
         vw, vh = int(CANVAS_W * scale), int(CANVAS_H * scale)
         return pygame.Rect((win_w - vw) // 2, (win_h - vh) // 2, vw, vh)
 
-    def run(self):
+    def run(self) -> None:
         while True:
+            dt = self.clock.tick(FPS) / 1000.0
+            if dt <= 0.0:
+                dt = 1.0 / FPS
+            dt = min(dt, 0.1)
+
             cur_screen = pygame.display.get_surface()
             if cur_screen:
                 self.screen = cur_screen
@@ -85,13 +90,12 @@ class MinerApp:
                     self.toggle_fullscreen()
                 self.state_machine.handle_event(event, virtual_pos)
 
-            self.state_machine.update(1.0 / FPS)
+            self.state_machine.update(dt)
             self.state_machine.render(self.canvas)
 
             self.screen.fill((0, 0, 0))
             self.screen.blit(pygame.transform.scale(self.canvas, (vp.w, vp.h)), (vp.x, vp.y))
             pygame.display.flip()
-            self.clock.tick(FPS)
 
 if __name__ == "__main__":
     app = MinerApp()
