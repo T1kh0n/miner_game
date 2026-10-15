@@ -8,7 +8,7 @@ from core.config import (
     WALL, DIRT, ROCK, COIN, EMPTY, STONE, FIXED_DT, MAX_ACCUMULATOR
 )
 from engine.level import Level
-from engine.entities import Player, RockEntity, Particle
+from engine.entities import Player, RockEntity, Particle, ParticlePool
 from engine.asset_manager import AssetManager
 from engine.ui import UIButton, UILabel, UIPanel, UINode
 from core.camera import Camera
@@ -69,6 +69,8 @@ class PlayState(State):
         self._coin_ticks = 0
         self.physics_accumulator = 0.0
         self.render_alpha = 1.0
+        self.particle_pool = ParticlePool(180)
+        self.particles = self.particle_pool.particles
         self._setup_end_panels()
 
     def _setup_end_panels(self) -> None:
@@ -132,7 +134,8 @@ class PlayState(State):
         self.panel_won.visible = False
         self.panel_pause.visible = False
 
-        self.particles = []
+        self.particle_pool = ParticlePool(180)
+        self.particles = self.particle_pool.particles
         self.rocks = []
         self.tile_shapes = {}
 
@@ -236,13 +239,13 @@ class PlayState(State):
         for _ in range(count):
             ang = random.uniform(0, 6.28)
             spd = random.uniform(0.6, 2.2)
-            self.particles.append(Particle(
+            self.particle_pool.spawn(
                 x, y,
                 math.cos(ang) * spd,
                 math.sin(ang) * spd,
                 random.choice(colors),
                 random.randint(14, 24)
-            ))
+            )
 
     def _is_key(self, keys, code_en: int, char_ru_code: int) -> bool:
         try:
@@ -344,6 +347,7 @@ class PlayState(State):
 
         self.render_alpha = self.physics_accumulator / FIXED_DT
         self.tutorial.update()
+        self.particle_pool.update()
 
         if self.player.is_dead:
             self.game_over = True
@@ -354,11 +358,6 @@ class PlayState(State):
                 depth = int(self.player.body.position.y // TILE_SIZE)
                 self.manager.leaderboard.add_score(self.score, depth, self.player.skin_id)
                 self.recorded_score = True
-
-        for p in self.particles[:]:
-            p.update()
-            if p.life <= 0:
-                self.particles.remove(p)
 
         p_tx = int(self.player.body.position.x // TILE_SIZE)
         p_ty = int(self.player.body.position.y // TILE_SIZE)
@@ -393,27 +392,53 @@ class PlayState(State):
             cam_x, cam_y = self.camera.x, self.camera.y
         cam_x, cam_y = int(cam_x), int(cam_y)
 
-        depth_ratio = min(1.0, max(0.0, ((interp_py - 60.0) / self.world_h) * 2.5))
-        for y in range(CANVAS_H - PANEL_HEIGHT):
-            t = y / (CANVAS_H - PANEL_HEIGHT)
-            cr = int((45 * (1.0 - depth_ratio) + 8 * depth_ratio) * (1.0 - t * 0.5))
-            cg = int((120 * (1.0 - depth_ratio) + 12 * depth_ratio) * (1.0 - t * 0.5))
-            cb = int((130 * (1.0 - depth_ratio) + 18 * depth_ratio) * (1.0 - t * 0.5))
-            pygame.draw.line(self.play_view, (cr, cg, cb), (0, y), (CANVAS_W, y))
+        view_w = CANVAS_W
+        view_h = CANVAS_H - PANEL_HEIGHT
 
-        start_col = max(0, int(cam_x // TILE_SIZE))
-        end_col = min(GRID_W, int((cam_x + CANVAS_W) // TILE_SIZE) + 2)
-        start_row = max(0, int(cam_y // TILE_SIZE))
-        end_row = min(GRID_H, int((cam_y + CANVAS_H - PANEL_HEIGHT) // TILE_SIZE) + 2)
+        depth_ratio = min(1.0, max(0.0, ((interp_py - 60.0) / self.world_h) * 2.5))
+        depth_key = int(depth_ratio * 30)
+        if not hasattr(self, "_cached_bg_key") or self._cached_bg_key != depth_key:
+            self._cached_bg_key = depth_key
+            if not hasattr(self, "_bg_col_surf"):
+                self._bg_col_surf = pygame.Surface((1, view_h))
+            for y in range(view_h):
+                t = y / view_h
+                cr = int((45 * (1.0 - depth_ratio) + 8 * depth_ratio) * (1.0 - t * 0.5))
+                cg = int((120 * (1.0 - depth_ratio) + 12 * depth_ratio) * (1.0 - t * 0.5))
+                cb = int((130 * (1.0 - depth_ratio) + 18 * depth_ratio) * (1.0 - t * 0.5))
+                self._bg_col_surf.set_at((0, y), (cr, cg, cb))
+        pygame.transform.scale(self._bg_col_surf, (CANVAS_W, view_h), self.play_view)
+
+        start_col = max(0, int((cam_x - TILE_SIZE) // TILE_SIZE))
+        end_col = min(GRID_W, int((cam_x + CANVAS_W + TILE_SIZE) // TILE_SIZE) + 1)
+        start_row = max(0, int((cam_y - TILE_SIZE) // TILE_SIZE))
+        end_row = min(GRID_H, int((cam_y + view_h + TILE_SIZE) // TILE_SIZE) + 1)
 
         coin_sprites = AssetManager.get().get_sprite("coin")
         coin_frame = coin_sprites[(self._coin_ticks // 80) % len(coin_sprites)]
 
+        light_cutoff_sq = 95.0 * 95.0
+        player_alive = not self.player.is_dead
+
         for y in range(start_row, end_row):
+            tile_world_y = y * TILE_SIZE + TILE_SIZE / 2.0
+            dy = tile_world_y - interp_py if player_alive else 999.0
+            dy_sq = dy * dy
             for x in range(start_col, end_col):
-                rx, ry = int(x * TILE_SIZE - cam_x), int(y * TILE_SIZE - cam_y)
                 if 0 <= x < GRID_W and 0 <= y < GRID_H:
                     cell = self.level.grid[y][x]
+                    if cell == EMPTY:
+                        continue
+                    rx = int(x * TILE_SIZE - cam_x)
+                    ry = int(y * TILE_SIZE - cam_y)
+                    tile_world_x = x * TILE_SIZE + TILE_SIZE / 2.0
+                    dx = tile_world_x - interp_px if player_alive else 999.0
+                    dist_sq = dx * dx + dy_sq
+
+                    if depth_ratio > 0.4 and dist_sq > light_cutoff_sq and cell != COIN:
+                        self.play_view.fill((10, 14, 20), (rx, ry, TILE_SIZE, TILE_SIZE))
+                        continue
+
                     if cell == WALL:
                         t_name = "wall_surface" if (y == 0 or self.level.grid[y - 1][x] == EMPTY) else "wall_under"
                         self.play_view.blit(AssetManager.get().get_sprite("tiles", t_name), (rx, ry))
@@ -426,9 +451,8 @@ class PlayState(State):
 
         asset_mgr = AssetManager.get()
         for rock in self.rocks:
-            rock.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha)
-        for p in self.particles:
-            p.render(self.play_view, cam_x, cam_y)
+            rock.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha, view_w, view_h)
+        self.particle_pool.render(self.play_view, cam_x, cam_y, view_w, view_h)
         self.player.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha)
 
         self.darkness_layer.fill((6, 8, 12, min(255, int(30 + depth_ratio * 225))))

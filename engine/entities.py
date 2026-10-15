@@ -7,6 +7,18 @@ from engine.asset_manager import AssetManager
 PLAYER_BODY_W = 12.0
 PLAYER_BODY_H = 18.0
 
+_PARTICLE_SURF_CACHE: dict[tuple[int, int, int, int, int], pygame.Surface] = {}
+
+def get_cached_particle_surface(color: tuple[int, int, int], alpha: int, size: int) -> pygame.Surface:
+    alpha_bin = max(0, min(255, (alpha // 16) * 16))
+    key = (color[0], color[1], color[2], alpha_bin, size)
+    surf = _PARTICLE_SURF_CACHE.get(key)
+    if surf is None:
+        surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(surf, (*color, alpha_bin), (size, size), size)
+        _PARTICLE_SURF_CACHE[key] = surf
+    return surf
+
 class Particle:
     def __init__(self, x: float, y: float, vx: float, vy: float, color: tuple[int, int, int], life: int, size: int = 2) -> None:
         self.x = float(x)
@@ -15,7 +27,7 @@ class Particle:
         self.vy = float(vy)
         self.color = color
         self.life = life
-        self.max_life = life
+        self.max_life = max(1, life)
         self.size = size
 
     def update(self) -> None:
@@ -26,9 +38,40 @@ class Particle:
     def render(self, surf: pygame.Surface, cam_x: float, cam_y: float) -> None:
         if self.life > 0:
             alpha = int(255 * (self.life / self.max_life))
-            ps = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
-            pygame.draw.circle(ps, (*self.color, alpha), (self.size, self.size), self.size)
+            ps = get_cached_particle_surface(self.color, alpha, self.size)
             surf.blit(ps, (int(self.x - cam_x) - self.size, int(self.y - cam_y) - self.size))
+
+class ParticlePool:
+    def __init__(self, capacity: int = 180) -> None:
+        self.capacity = capacity
+        self.particles = [Particle(0.0, 0.0, 0.0, 0.0, (255, 255, 255), 0) for _ in range(capacity)]
+        self.next_idx = 0
+
+    def spawn(self, x: float, y: float, vx: float, vy: float, color: tuple[int, int, int], life: int, size: int = 2) -> None:
+        p = self.particles[self.next_idx]
+        p.x = float(x)
+        p.y = float(y)
+        p.vx = float(vx)
+        p.vy = float(vy)
+        p.color = color
+        p.life = life
+        p.max_life = max(1, life)
+        p.size = size
+        self.next_idx = (self.next_idx + 1) % self.capacity
+
+    def update(self) -> None:
+        for p in self.particles:
+            if p.life > 0:
+                p.update()
+
+    def render(self, surf: pygame.Surface, cam_x: float, cam_y: float, view_w: float, view_h: float) -> None:
+        min_x = cam_x - TILE_SIZE
+        max_x = cam_x + view_w + TILE_SIZE
+        min_y = cam_y - TILE_SIZE
+        max_y = cam_y + view_h + TILE_SIZE
+        for p in self.particles:
+            if p.life > 0 and min_x <= p.x <= max_x and min_y <= p.y <= max_y:
+                p.render(surf, cam_x, cam_y)
 
 class RockEntity:
     def __init__(self, tx: int, ty: int, space: pymunk.Space) -> None:
@@ -67,9 +110,13 @@ class RockEntity:
             self.body.velocity = self._locked_velocity
             self._locked_velocity = None
 
-    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager, alpha: float = 1.0) -> None:
-        sprite = asset_mgr.get_sprite("tiles", "rock")
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager, alpha: float = 1.0, view_w: float = 320.0, view_h: float = 208.0) -> None:
         ix, iy, iangle = self.get_interpolated_pose(alpha)
+        if ix + self.radius < cam_x - TILE_SIZE or ix - self.radius > cam_x + view_w + TILE_SIZE:
+            return
+        if iy + self.radius < cam_y - TILE_SIZE or iy - self.radius > cam_y + view_h + TILE_SIZE:
+            return
+        sprite = asset_mgr.get_sprite("tiles", "rock")
         angle_deg = math.degrees(iangle)
         rotated = pygame.transform.rotate(sprite, -angle_deg)
         rx = int(ix - cam_x)
