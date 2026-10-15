@@ -2,6 +2,7 @@ import random
 import pygame
 import pymunk
 import math
+from typing import Any, Callable
 from core.config import (
     CANVAS_W, CANVAS_H, PANEL_HEIGHT, TILE_SIZE, GRID_W, GRID_H,
     COLOR_TEXT, COLOR_GOLD, COLOR_DANGER, COLOR_SUCCESS, PAL_OUTLINE,
@@ -20,21 +21,39 @@ from core.save_system import (
 from states.state_machine import State
 
 class TutorialSystem:
-    def __init__(self, font: pygame.font.Font, loc: LocalizationManager) -> None:
+    def __init__(self, font: pygame.font.Font, loc: LocalizationManager, on_hint_fired: Callable[[str], None] | None = None, initial_seen: set[str] | None = None) -> None:
         self.font = font
         self.loc = loc
-        self.hints = []
-        self.fired: set[str] = set()
+        self.hints: list[dict[str, Any]] = []
+        self.seen_hints: set[str] = set(initial_seen) if initial_seen else set()
+        self.on_hint_fired = on_hint_fired
 
-    def fire(self, key: str, default_text: str = "") -> None:
-        if key not in self.fired:
-            self.fired.add(key)
-            text = self.loc.get_text(f"hint_{key}", default_text if default_text else key)
-            self.hints.append({"key": key, "text": text, "life": 240, "max_life": 240})
+    @property
+    def fired(self) -> set[str]:
+        return self.seen_hints
+
+    def fire(self, key: str, default_text: str = "") -> bool:
+        if key in self.seen_hints:
+            return False
+        self.seen_hints.add(key)
+        text = self.loc.get_text(f"hint_{key}", default_text if default_text else key)
+        self.hints.append({"key": key, "text": text, "life": 240, "max_life": 240})
+        if self.on_hint_fired:
+            self.on_hint_fired(key)
+        return True
+
+    def reset_hints(self) -> None:
+        self.seen_hints.clear()
+        self.hints.clear()
+        toast = self.loc.get_text("hints_reset_done", "Tutorial hints have been reset.")
+        self.hints.append({"key": "reset_toast", "text": toast, "life": 180, "max_life": 180})
 
     def refresh_strings(self) -> None:
         for h in self.hints:
-            h["text"] = self.loc.get_text(f"hint_{h['key']}", h["text"])
+            if h["key"] == "reset_toast":
+                h["text"] = self.loc.get_text("hints_reset_done", h["text"])
+            else:
+                h["text"] = self.loc.get_text(f"hint_{h['key']}", h["text"])
 
     def update(self) -> None:
         for h in self.hints[:]:
@@ -141,12 +160,13 @@ class PlayState(State):
 
     def _reset_hints(self) -> None:
         if hasattr(self, "tutorial"):
-            self.tutorial.fired.clear()
-            self.tutorial.hints.clear()
-            self.tutorial.fire("reset_done", self.loc.get_text("hints_reset_done", "Tutorial hints have been reset."))
+            self.tutorial.reset_hints()
+        existing_slot = self.save_manager.load_slot(self.active_slot_index)
+        if existing_slot is not None:
+            existing_slot.progression.seen_hints = []
+            self.save_manager.save_slot(self.active_slot_index, existing_slot)
         if self.last_checkpoint_snapshot is not None:
             self.last_checkpoint_snapshot.progression.seen_hints = []
-            self.save_manager.save_slot(self.active_slot_index, self.last_checkpoint_snapshot)
 
     def _refresh_strings(self) -> None:
         self.btn_over_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
@@ -205,7 +225,15 @@ class PlayState(State):
         self.rocks = []
         self.tile_shapes = {}
 
-        self.tutorial = TutorialSystem(self.font, self.loc)
+        existing_slot = self.save_manager.load_slot(self.active_slot_index)
+        initial_seen = set(existing_slot.progression.seen_hints) if existing_slot else set()
+
+        def _on_hint_fired(key: str) -> None:
+            if self.last_checkpoint_snapshot is not None:
+                self.last_checkpoint_snapshot.progression.seen_hints = list(self.tutorial.seen_hints)
+                self.save_manager.save_slot(self.active_slot_index, self.last_checkpoint_snapshot)
+
+        self.tutorial = TutorialSystem(self.font, self.loc, on_hint_fired=_on_hint_fired, initial_seen=initial_seen)
         self.tutorial.fire("start", "WASD / Arrows: Move  |  Space: Jump  |  Shift: Climb  |  E: Cabin")
 
         self.cabins = [CabinEntity(cid, cx, cy) for cx, cy, cid in self.level.cabin_locations]
@@ -372,7 +400,7 @@ class PlayState(State):
             progression=ProgressionDTO(
                 checkpoint_id=cabin.cabin_id,
                 elapsed_playtime=self.elapsed_playtime,
-                seen_hints=list(self.tutorial.fired)
+                seen_hints=list(self.tutorial.seen_hints)
             )
         )
         self.last_checkpoint_snapshot = slot
