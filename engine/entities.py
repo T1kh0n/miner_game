@@ -1,7 +1,7 @@
 import pygame
 import pymunk
 import math
-from core.config import TILE_SIZE
+from core.config import TILE_SIZE, CANVAS_W, CANVAS_H
 from engine.asset_manager import AssetManager
 
 PLAYER_BODY_W = 12.0
@@ -123,6 +123,48 @@ class RockEntity:
         ry = int(iy - cam_y)
         rect = rotated.get_rect(center=(rx, ry))
         surface.blit(rotated, rect)
+
+class CabinEntity:
+    def __init__(self, cabin_id: str, tx: int, ty: int) -> None:
+        self.cabin_id = cabin_id
+        self.tx = tx
+        self.ty = ty
+        self.x = tx * TILE_SIZE + TILE_SIZE / 2.0
+        self.y = ty * TILE_SIZE + TILE_SIZE / 2.0
+        self.w = 26.0
+        self.h = 24.0
+        self.activated = False
+
+    def is_near(self, px: float, py: float) -> bool:
+        return abs(self.x - px) <= 22.0 and abs(self.y - py) <= 22.0
+
+    def activate(self, emit_particles, camera) -> None:
+        self.activated = True
+        camera.add_shake(2.0, 8)
+        emit_particles(
+            self.x, self.y - 4.0,
+            [(255, 215, 60), (255, 240, 180), (180, 140, 90)],
+            20
+        )
+
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float) -> None:
+        rx = int(self.x - self.w / 2.0 - cam_x)
+        ry = int(self.y - self.h / 2.0 - cam_y)
+        if rx + self.w < -TILE_SIZE or rx > CANVAS_W + TILE_SIZE:
+            return
+        if ry + self.h < -TILE_SIZE or ry > CANVAS_H + TILE_SIZE:
+            return
+
+        pygame.draw.rect(surface, (70, 42, 24), (rx, ry + 8, int(self.w), int(self.h - 8)), border_radius=2)
+        pygame.draw.polygon(surface, (120, 60, 30), [
+            (rx - 2, ry + 9),
+            (rx + int(self.w // 2), ry),
+            (rx + int(self.w) + 2, ry + 9)
+        ])
+        door_col = (40, 25, 15) if not self.activated else (90, 60, 30)
+        pygame.draw.rect(surface, door_col, (rx + 8, ry + 12, 10, 12), border_radius=1)
+        lantern_col = (255, 230, 100) if self.activated else (160, 140, 80)
+        pygame.draw.circle(surface, lantern_col, (rx + 4, ry + 14), 2)
 
 class Player:
     def __init__(self, x: float, y: float, skin_id: str, space: pymunk.Space) -> None:

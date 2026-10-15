@@ -3,16 +3,19 @@ from collections import deque
 from core.config import GRID_W, GRID_H, TILE_SIZE, EMPTY, WALL, DIRT, ROCK, COIN, STONE
 
 class Level:
-    def __init__(self, w=GRID_W, h=GRID_H):
+    def __init__(self, w: int = GRID_W, h: int = GRID_H, seed: int | None = None) -> None:
         self.w = w
         self.h = h
+        self.seed = seed if seed is not None else random.randint(1, 999999)
         self.grid = [[WALL for _ in range(self.w)] for _ in range(self.h)]
         self.spawn_x = 0.0
         self.spawn_y = 0.0
         self.total_coins = 0
+        self.cabin_locations: list[tuple[int, int, str]] = []
         self.generate()
 
-    def generate(self):
+    def generate(self) -> None:
+        random.seed(self.seed)
         visited = [[False for _ in range(self.w)] for _ in range(self.h)]
         center_x = self.w // 2
 
@@ -95,7 +98,29 @@ class Level:
                         reachable.add((nx, ny))
                         q.append((nx, ny))
 
-        valid_nodes = [(x, y) for (x, y) in reachable if y > 4 and self.grid[y][x] in (DIRT, EMPTY)]
+        cabin_coords = set()
+        for target_d in [25, 55, 85]:
+            candidates = [
+                (x, y) for (x, y) in reachable
+                if abs(y - target_d) <= 6 and y + 1 < self.h - 1 and 2 < x < self.w - 3
+            ]
+            if candidates:
+                candidates.sort(key=lambda pt: (abs(pt[1] - target_d), abs(pt[0] - center_x)))
+                best_x, best_y = candidates[0]
+            else:
+                best_x, best_y = center_x, target_d
+            self.grid[best_y][best_x] = EMPTY
+            self.grid[best_y - 1][best_x] = EMPTY
+            self.grid[best_y + 1][best_x] = WALL
+            cid = f"cabin_depth_{target_d}"
+            self.cabin_locations.append((best_x, best_y, cid))
+            cabin_coords.add((best_x, best_y))
+            cabin_coords.add((best_x, best_y - 1))
+
+        valid_nodes = [
+            (x, y) for (x, y) in reachable
+            if y > 4 and self.grid[y][x] in (DIRT, EMPTY) and (x, y) not in cabin_coords
+        ]
         random.shuffle(valid_nodes)
 
         num_rocks = min(60, len(valid_nodes) // 8)

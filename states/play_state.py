@@ -8,10 +8,14 @@ from core.config import (
     WALL, DIRT, ROCK, COIN, EMPTY, STONE, FIXED_DT, MAX_ACCUMULATOR
 )
 from engine.level import Level
-from engine.entities import Player, RockEntity, Particle, ParticlePool
+from engine.entities import Player, RockEntity, Particle, ParticlePool, CabinEntity
 from engine.asset_manager import AssetManager
 from engine.ui import UIButton, UILabel, UIPanel, UINode
 from core.camera import Camera
+from core.save_system import (
+    SaveManager, SaveSlotDTO, PlayerStateDTO, WorldStateDTO,
+    ProgressionDTO, Vector2DTO, InventoryItemDTO, MinedTileDTO, RockStateDTO
+)
 from states.state_machine import State
 
 class TutorialSystem:
@@ -66,11 +70,18 @@ class PlayState(State):
         self.light_coin = self._make_light_mask(24)
 
         self.camera = Camera(self.world_w, self.world_h)
+        self.save_manager = SaveManager()
+        self.active_slot_index = 1
+        self.last_checkpoint_snapshot: SaveSlotDTO | None = None
+        self.mined_tile_coords: list[tuple[int, int]] = []
+        self.elapsed_playtime = 0.0
+
         self._coin_ticks = 0
         self.physics_accumulator = 0.0
         self.render_alpha = 1.0
         self.particle_pool = ParticlePool(180)
         self.particles = self.particle_pool.particles
+        self.cabins: list[CabinEntity] = []
         self._setup_end_panels()
 
     def _setup_end_panels(self) -> None:
@@ -80,7 +91,7 @@ class PlayState(State):
         self.panel_over = UIPanel(0.5, 0.5, 190, 84, border_color=COLOR_DANGER)
         self.death_label = UILabel(0.5, 0.28, "ОБВАЛ В ШАХТЕ", self.font_big, COLOR_DANGER)
         self.panel_over.add_child(self.death_label)
-        self.panel_over.add_child(UIButton(0.25, 0.75, 68, 20, "ЗАНОВО", self.font, self.enter))
+        self.panel_over.add_child(UIButton(0.25, 0.75, 68, 20, "ЗАНОВО", self.font, self.respawn_at_checkpoint))
         self.panel_over.add_child(UIButton(0.75, 0.75, 68, 20, "МЕНЮ", self.font, lambda: self.manager.change("menu")))
         self.panel_over.visible = False
         self.root.add_child(self.panel_over)
@@ -129,6 +140,9 @@ class PlayState(State):
         self._coin_ticks = 0
         self.physics_accumulator = 0.0
         self.render_alpha = 1.0
+        self.mined_tile_coords = []
+        self.elapsed_playtime = 0.0
+        self.last_checkpoint_snapshot = None
 
         self.panel_over.visible = False
         self.panel_won.visible = False
@@ -141,6 +155,8 @@ class PlayState(State):
 
         self.tutorial = TutorialSystem(self.font)
         self.tutorial.fire("start", "WASD / Arrows: Move  |  Space: Jump  |  Shift: Climb")
+
+        self.cabins = [CabinEntity(cid, cx, cy) for cx, cy, cid in self.level.cabin_locations]
 
         top_boundary = pymunk.Segment(self.space.static_body, (0, 0), (self.world_w, 0), 2)
         top_boundary.friction = 0.5
@@ -257,6 +273,7 @@ class PlayState(State):
         if 0 <= dig_x < GRID_W and 0 <= dig_y < GRID_H:
             if self.level.grid[dig_y][dig_x] == DIRT:
                 self.level.grid[dig_y][dig_x] = EMPTY
+                self.mined_tile_coords.append((dig_x, dig_y))
                 self.player.dig_time = self.player.dig_duration
                 self.player.dig_timer = int(self.player.dig_duration * 60)
                 self.camera.add_shake(0.6, 3)
@@ -271,6 +288,72 @@ class PlayState(State):
                 self.tutorial.fire("dig", "Dirt cleared! Watch for falling rocks above.")
                 return True
         return False
+
+    def save_checkpoint(self, cabin: CabinEntity) -> None:
+        slot = SaveSlotDTO(
+            version=1,
+            player=PlayerStateDTO(
+                position=Vector2DTO(cabin.x, cabin.y - 2.0),
+                health=100.0,
+                stamina=100.0,
+                inventory=[InventoryItemDTO("coin", self.score)],
+                skin_id=self.player.skin_id
+            ),
+            world=WorldStateDTO(
+                seed=self.level.seed,
+                mined_tiles=[MinedTileDTO(x, y) for x, y in self.mined_tile_coords],
+                rocks=[
+                    RockStateDTO(
+                        id=i,
+                        position=Vector2DTO(r.body.position.x, r.body.position.y),
+                        velocity=Vector2DTO(r.body.velocity.x, r.body.velocity.y),
+                        angle=r.body.angle
+                    )
+                    for i, r in enumerate(self.rocks)
+                ]
+            ),
+            progression=ProgressionDTO(
+                checkpoint_id=cabin.cabin_id,
+                elapsed_playtime=self.elapsed_playtime,
+                seen_hints=list(self.tutorial.fired)
+            )
+        )
+        self.last_checkpoint_snapshot = slot
+        self.save_manager.save_slot(self.active_slot_index, slot)
+
+    def respawn_at_checkpoint(self) -> None:
+        if self.last_checkpoint_snapshot is None:
+            self.enter()
+            return
+
+        snap = self.last_checkpoint_snapshot
+        self.player.is_dead = False
+        self.player.death_reason = ""
+        self.player.health = snap.player.health
+        self.player.stamina = snap.player.stamina
+        self.player.body.position = (snap.player.position.x, snap.player.position.y)
+        self.player.body.velocity = (0.0, 0.0)
+        self.player.prev_x = snap.player.position.x
+        self.player.prev_y = snap.player.position.y
+        self.player.prev_vy = 0.0
+        self.player.anim_time = 0.0
+        self.player.climb_time = 0.0
+        self.player.dig_time = 0.0
+        self.player.is_climbing = False
+        self.player.is_digging = False
+
+        self.game_over = False
+        self.panel_over.visible = False
+        self.camera.x = self.player.body.position.x - CANVAS_W / 2.0
+        self.camera.y = self.player.body.position.y - (CANVAS_H - PANEL_HEIGHT) / 2.0
+
+        for r_dto, rock in zip(snap.world.rocks, self.rocks):
+            rock.body.position = (r_dto.position.x, r_dto.position.y)
+            rock.body.velocity = (r_dto.velocity.x, r_dto.velocity.y)
+            rock.body.angle = r_dto.angle
+            rock.prev_x = r_dto.position.x
+            rock.prev_y = r_dto.position.y
+            rock.prev_angle = r_dto.angle
 
     def handle_event(self, event: pygame.event.Event, mouse_pos: tuple[int, int]) -> None:
         clicked = (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1)
@@ -289,6 +372,7 @@ class PlayState(State):
         if self.game_over or self.game_won or self.paused:
             return
 
+        self.elapsed_playtime += dt
         self._coin_ticks += int(dt * 1000)
         self.physics_accumulator = min(self.physics_accumulator + dt, MAX_ACCUMULATOR)
 
@@ -299,6 +383,7 @@ class PlayState(State):
         right = self._is_key(keys, pygame.K_RIGHT, 1074) or self._is_key(keys, pygame.K_d, 1074)
         jump = keys[pygame.K_SPACE]
         climb_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        interact = keys[pygame.K_e] or self._is_key(keys, pygame.K_e, 1091) or up
 
         while self.physics_accumulator >= FIXED_DT:
             self.player.save_previous_state()
@@ -306,6 +391,18 @@ class PlayState(State):
                 rock.save_previous_state()
 
             self.player.update(up, down, left, right, jump, climb_held, FIXED_DT, self.space, self.emit_particles, self.camera)
+
+            if interact and not self.player.is_dead and not self.player.is_climbing:
+                px = self.player.body.position.x
+                py = self.player.body.position.y
+                for cabin in self.cabins:
+                    if cabin.is_near(px, py):
+                        if not cabin.activated:
+                            cabin.activate(self.emit_particles, self.camera)
+                            self.player.health = 100.0
+                            self.player.stamina = 100.0
+                            self.save_checkpoint(cabin)
+                            self.tutorial.fire("checkpoint", "Checkpoint saved! Progress secured.")
 
             if (self.player.on_wall_l or self.player.on_wall_r) and not self.player.on_ground:
                 self.tutorial.fire("wall_contact", "Press Shift to climb or grab the wall!")
@@ -448,6 +545,9 @@ class PlayState(State):
                         self.play_view.blit(AssetManager.get().get_sprite("tiles", "stone"), (rx, ry))
                     elif cell == COIN:
                         self.play_view.blit(coin_frame, (rx, ry))
+
+        for cabin in self.cabins:
+            cabin.render(self.play_view, cam_x, cam_y)
 
         asset_mgr = AssetManager.get()
         for rock in self.rocks:
