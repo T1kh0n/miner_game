@@ -313,27 +313,31 @@ class PlayState(State):
             if not self.player.is_dead and not self.player.is_climbing:
                 px = self.player.body.position.x
                 py = self.player.body.position.y
-                hw = self.player.w / 2
-                hh = self.player.h / 2
+                hw = self.player.w / 2.0
+                hh = self.player.h / 2.0
 
                 if (jump and self.player.on_ground) or (self.player.body.velocity.y < -30.0):
-                    above_y = int((py - hh - 2) // TILE_SIZE)
-                    for test_x in [int((px - hw + 2) // TILE_SIZE), int((px + hw - 2) // TILE_SIZE)]:
+                    above_y = int((py - hh - 2.0) // TILE_SIZE)
+                    for test_x in [int((px - hw + 2.0) // TILE_SIZE), int((px + hw - 2.0) // TILE_SIZE)]:
                         self._dig_tile(test_x, above_y)
 
                 if up or down or left or right:
-                    dig_x, dig_y = -1, -1
+                    dir_x, dir_y = 0, 0
                     if down and self.player.on_ground:
-                        dig_x = int(px // TILE_SIZE)
-                        dig_y = int((py + hh + 2) // TILE_SIZE)
+                        dir_y = 1
                     elif up and not self.player.on_ground:
-                        dig_x = int(px // TILE_SIZE)
-                        dig_y = int((py - hh - 2) // TILE_SIZE)
+                        dir_y = -1
                     else:
-                        offset = hw + 2 if self.player.facing_right else -hw - 2
-                        dig_x = int((px + offset) // TILE_SIZE)
-                        dig_y = int(py // TILE_SIZE)
-                    self._dig_tile(dig_x, dig_y)
+                        dir_x = 1 if self.player.facing_right else -1
+
+                    bx1, by1, bx2, by2 = self.player.get_dig_sensor_bounds(dir_x, dir_y)
+                    t_x1 = max(0, int(bx1 // TILE_SIZE))
+                    t_x2 = min(GRID_W - 1, int(bx2 // TILE_SIZE))
+                    t_y1 = max(0, int(by1 // TILE_SIZE))
+                    t_y2 = min(GRID_H - 1, int(by2 // TILE_SIZE))
+                    for ty in range(t_y1, t_y2 + 1):
+                        for tx in range(t_x1, t_x2 + 1):
+                            self._dig_tile(tx, ty)
 
             self.space.step(FIXED_DT)
             self.physics_accumulator -= FIXED_DT

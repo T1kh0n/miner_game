@@ -4,6 +4,9 @@ import math
 from core.config import TILE_SIZE
 from engine.asset_manager import AssetManager
 
+PLAYER_BODY_W = 12.0
+PLAYER_BODY_H = 18.0
+
 class Particle:
     def __init__(self, x: float, y: float, vx: float, vy: float, color: tuple[int, int, int], life: int, size: int = 2) -> None:
         self.x = float(x)
@@ -78,27 +81,17 @@ class Player:
     def __init__(self, x: float, y: float, skin_id: str, space: pymunk.Space) -> None:
         self.skin_id = skin_id
 
-        mgr = AssetManager.get()
-        sprite = mgr.get_sprite(f"player_{skin_id}", "idle_0")
-        mask = pygame.mask.from_surface(sprite)
-        rects = mask.get_bounding_rects()
-        if rects:
-            union = rects[0].unionall(rects[1:])
-            self.w = max(8, union.width)
-            self.h = max(10, union.height)
-            self.offset_x = union.centerx
-            self.offset_y = union.centery
-        else:
-            self.w = sprite.get_width()
-            self.h = sprite.get_height()
-            self.offset_x = sprite.get_width() // 2
-            self.offset_y = sprite.get_height() // 2
+        self.w = PLAYER_BODY_W
+        self.h = PLAYER_BODY_H
+        self.offset_x = 14
+        self.offset_y = 12
 
         self.is_dead = False
         self.death_reason = ""
         self.facing_right = True
         self.is_digging = False
         self.is_climbing = False
+        self.climb_anchor_point: tuple[float, float] | None = None
         self.dig_timer = 0
         self.climb_tick = 0
         self.anim_tick = 0
@@ -134,6 +127,42 @@ class Player:
         ix = self.prev_x * (1.0 - alpha) + self.body.position.x * alpha
         iy = self.prev_y * (1.0 - alpha) + self.body.position.y * alpha
         return ix, iy
+
+    def check_climb_anchor(self, space: pymunk.Space) -> bool:
+        start_x = self.body.position.x
+        start_y = self.body.position.y - 2.0
+        reach = (self.w / 2.0) + 8.0
+        direction = 1.0 if self.facing_right else -1.0
+        end_x = start_x + direction * reach
+        end_y = start_y
+        hits = space.segment_query(
+            (start_x, start_y),
+            (end_x, end_y),
+            1.0,
+            pymunk.ShapeFilter()
+        )
+        for hit in hits:
+            if hit.shape != self.shape and not getattr(hit.shape, "sensor", False):
+                self.climb_anchor_point = (hit.point.x, hit.point.y)
+                return True
+        self.climb_anchor_point = None
+        return False
+
+    def get_dig_sensor_bounds(self, dir_x: int, dir_y: int) -> tuple[float, float, float, float]:
+        cx = self.body.position.x
+        cy = self.body.position.y
+        hw = self.w / 2.0
+        hh = self.h / 2.0
+        reach_x = hw + 8.0
+        reach_y = hh + 8.0
+        if dir_y > 0:
+            return (cx - hw, cy + hh, cx + hw, cy + reach_y)
+        elif dir_y < 0:
+            return (cx - hw, cy - reach_y, cx + hw, cy - hh)
+        elif dir_x > 0:
+            return (cx + hw, cy - hh, cx + reach_x, cy + hh)
+        else:
+            return (cx - reach_x, cy - hh, cx - hw, cy + hh)
 
     def _get_current_frame_key(self) -> str:
         if self.is_climbing:
@@ -178,7 +207,19 @@ class Player:
         if on_ceiling and self.body.velocity.y < 0:
             self.body.velocity = (self.body.velocity.x, max(0.0, self.body.velocity.y))
 
-        on_wall = (self.on_wall_l and left) or (self.on_wall_r and right)
+        move_axis = 0.0
+        if left:
+            move_axis -= 1.0
+        if right:
+            move_axis += 1.0
+
+        if move_axis > 0:
+            self.facing_right = True
+        elif move_axis < 0:
+            self.facing_right = False
+
+        has_anchor = self.check_climb_anchor(space) if (climb_held or self.is_climbing) else False
+        on_wall = (self.on_wall_l and not self.facing_right) or (self.on_wall_r and self.facing_right) or (self.on_wall_l and left) or (self.on_wall_r and right) or has_anchor
         self.is_climbing = on_wall and climb_held and self.stamina > 0 and not on_ceiling and not self.on_ground
 
         if self.on_ground and not self.is_climbing:
@@ -191,17 +232,6 @@ class Player:
                     self.death_reason = "РАЗБИЛСЯ НАСМЕРТЬ"
                     camera.add_shake(8.0, 20)
                     particle_emitter(self.body.position.x, self.body.position.y, [(255, 60, 60)], 25)
-
-        move_axis = 0.0
-        if left:
-            move_axis -= 1.0
-        if right:
-            move_axis += 1.0
-
-        if move_axis > 0:
-            self.facing_right = True
-        elif move_axis < 0:
-            self.facing_right = False
 
         target_vx = move_axis * 110.0
         current_vx = self.body.velocity.x
@@ -255,20 +285,12 @@ class Player:
         frame_key = self._get_current_frame_key()
         sprite = asset_mgr.get_sprite(skin_bundle, frame_key)
 
-        sprite_w = sprite.get_width()
-        mask = pygame.mask.from_surface(sprite)
-        rects = mask.get_bounding_rects()
-        if rects:
-            union = rects[0].unionall(rects[1:])
-            ox = union.centerx
-            oy = union.centery
-        else:
-            ox = sprite_w // 2
-            oy = sprite.get_height() // 2
+        ox = self.offset_x
+        oy = self.offset_y
 
         if not self.facing_right:
             sprite = pygame.transform.flip(sprite, True, False)
-            ox = sprite_w - ox
+            ox = sprite.get_width() - ox
 
         ix, iy = self.get_interpolated_pos(alpha)
         rx = int(ix - cam_x) - ox
