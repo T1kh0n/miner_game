@@ -4,6 +4,39 @@ A 2D procedural mining platformer engineered with a clean, decoupled architectur
 
 ---
 
+## CHARACTER ART & ANIMATION PIPELINE (REAL CAT PHOTO TO PIXEL SPRITESHEET)
+
+### 1. Visual Style & Proportions
+- Canvas & Grid: Native character frame size is `32x36` pixels (or `36x36` for wide weapons/tails).
+- Proportions: Bipedal Anthropomorphic Cat (1:2.5 head-to-body ratio). Stocky, grounded silhouette with expressive ears, whiskers, and animated tail counterweight.
+- Outlines & Shading: 1px dark warm-charcoal outer outline `(22, 18, 24)`. Internal details (fur stripes, vest pockets, armor plates) use soft 3-tone ramp shading (Base, Shadow `-25%` luminance, Highlight `+20%` luminance) with selective outlining.
+
+### 2. Translating a Real Cat Photo / Reference into Pixel Art
+When given a photo of a real cat or a concept image:
+1. Coat & Fur Extraction: Sample 3 primary fur colors from the photo (Primary Coat, Secondary Belly/Paws, Dark Markings/Tabby Stripes). Map facial markings (M-shaped forehead tabby lines, muzzle patches, ear tips).
+2. Eye & Expression Mapping: Extract exact iris colors (including heterochromia, e.g., left red/amber, right blue). Express personality via eyelid height (half-closed tired eyes for the Miner; wide-open cheerful eyes for the Train Driver; stern furrowed brows for the Soldier; manic dilated pupils for the Feral Cat).
+3. Silhouette & Gear Layering: Render the sprite in 4 modular procedural layers inside `AssetGenerator`:
+   - Layer 0 (Back): Animated curved tail (`sin` wave phase offset) + backpack/cloak.
+   - Layer 1 (Body & Limbs): Bipedal torso, fur coat, trousers/boots, and faction armor (e.g., khaki utility vest, railway coat, hollowed watermelon rind cuirass, or tattered rope harness).
+   - Layer 2 (Head & headgear): Feline skull, ears (which flatten during attacks/falls), muzzle, whiskers, and headgear (miner hard-hat with headlamp, fur ushanka, watermelon helmet).
+   - Layer 3 (Foreground Arms & Tool): Paws holding the character's signature tool (pickaxe, oil lantern, combat shovel, or bared claws).
+
+### 3. Mandatory Animation States & Frame Matrix
+Every playable/interactive cat character spritesheet (`assets/spritesheets/cat_{id}.png` + `assets/data/cat_{id}.json`) MUST implement the following standardized frame keys:
+- `idle_0..3` (4 frames): Breathing cycle (1px chest/head bob, subtle tail sway, ear twitch on frame 3).
+- `walk_0..7` (8 frames): Bipedal stride cycle with opposite arm/paw swing, 1px vertical bounce, and trailing tail sine wave.
+- `run_0..5` (6 frames): Forward-leaning torso (`+2px` lean), rapid paw cycle, horizontal tail stabilizer.
+- `jump_0..1` (2 frames): Upward stretch (`scale_y=1.12`), ears perked up, paws raised.
+- `fall_0..1` (2 frames): Air-resistance pose, ears flattened back, tail swirling for balance.
+- `land_0` (1 frame): Squash impact (`scale_x=1.18, scale_y=0.82`) with dust particle trigger.
+- `action_0..3` (4 frames): Primary tool/weapon swing (Pickaxe dig for Miner, Lantern raise for Driver, Shovel strike/block for Soldier, Lunging claw swipe for Feral Cat).
+- `climb_0..3` (4 frames): Wall/rope climbing cycle with alternating paw/pickaxe hooks.
+- `hurt_0..1` (2 frames): Knockback flinch, white flash mask, squinted eyes (`><`).
+- `talk_0..3` (4 frames): Dialogue gesture cycle (mouth open/close or expressive paw/ear movement + emote bubble anchor).
+- `afk_0..5` (6 frames): 4th-wall break sequence (turns face-front toward camera, taps screen glass with paw/pickaxe, points headlamp directly into the player's monitor).
+
+---
+
 ## 1. Project Architecture & Directory Structure
 
 ```text
