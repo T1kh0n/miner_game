@@ -6,7 +6,7 @@ INITIAL_SCREEN_H = CANVAS_H * DEFAULT_SCALE
 TILE_SIZE = 20
 GRID_W = 48
 GRID_H = 120
-PANEL_HEIGHT = 32
+PANEL_HEIGHT = 0
 FPS = 60
 FIXED_DT = 1.0 / 60.0
 MAX_ACCUMULATOR = 0.2
@@ -17,10 +17,21 @@ ROCK = 3
 COIN = 4
 STONE = 5
 PAL_OUTLINE = (20, 16, 26)
+CAT_OUTLINE = (22, 18, 24)
 COLOR_TEXT = (245, 240, 225)
 COLOR_GOLD = (255, 215, 60)
 COLOR_DANGER = (255, 80, 80)
 COLOR_SUCCESS = (90, 240, 140)
+CAT_MINER_ID = "miner"
+CAT_FRAME_W = 36
+CAT_FRAME_H = 36
+CAT_BODY_W = 12.0
+CAT_BODY_H = 26.0
+FLASHLIGHT_ANGLE = 65.0
+FLASHLIGHT_SELF_GLOW = 22
+AFK_KNOCK_SECONDS = 8.0
+AFK_BLIND_SECONDS = 14.0
+ROPE_MAX_LENGTH = 110.0
 SKIN_PALETTES = {
     "classic": {
         "suit_main": (42, 124, 235),
@@ -50,4 +61,23 @@ SKIN_PALETTES = {
         "helmet_light": (225, 140, 255),
         "skin": (240, 205, 180)
     }
+}
+CAT_MINER_PALETTE = {
+    "coat_primary": (142, 120, 96),
+    "coat_secondary": (188, 168, 140),
+    "coat_dark": (72, 58, 44),
+    "belly": (210, 192, 168),
+    "vest_main": (130, 128, 88),
+    "vest_dark": (92, 90, 58),
+    "vest_pocket": (108, 106, 70),
+    "helmet_yellow": (240, 190, 30),
+    "helmet_dark": (180, 138, 18),
+    "lamp_glow": (255, 245, 180),
+    "eye_left": (180, 100, 30),
+    "eye_right": (180, 100, 30),
+    "nose": (220, 130, 120),
+    "whisker": (230, 220, 200),
+    "boot": (58, 46, 34),
+    "pickaxe_handle": (130, 80, 40),
+    "pickaxe_head": (160, 168, 180),
 }
