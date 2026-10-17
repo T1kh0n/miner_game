@@ -100,47 +100,8 @@ class TutorialSystem:
             y_pos -= ts.get_height() + 8
 
 
-def _build_flashlight_cone(
-    view_w: int,
-    view_h: int,
-    px: int,
-    py: int,
-    angle_rad: float,
-    beam_angle_deg: float = FLASHLIGHT_ANGLE,
-    beam_length: int = 120,
-    self_glow_r: int = FLASHLIGHT_SELF_GLOW,
-) -> pygame.Surface:
-    """Return an SRCALPHA darkness layer with a directional flashlight cone cut out.
-
-    The layer is filled opaque dark, then the cone polygon and self-glow circle
-    are subtracted using BLEND_RGBA_SUB so those regions become transparent.
-    """
-    layer = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
-    layer.fill((6, 8, 12, 0))
-
-    half_angle = math.radians(beam_angle_deg / 2.0)
-    left_rad = angle_rad - half_angle
-    right_rad = angle_rad + half_angle
-
-    steps = 12
-    cone_pts = [(px, py)]
-    for i in range(steps + 1):
-        a = left_rad + (right_rad - left_rad) * (i / steps)
-        cone_pts.append((
-            px + int(math.cos(a) * beam_length),
-            py + int(math.sin(a) * beam_length),
-        ))
-
-    glow_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
-    glow_surf.fill((0, 0, 0, 0))
-    if len(cone_pts) >= 3:
-        pygame.draw.polygon(glow_surf, (0, 0, 0, 200), cone_pts)
-    pygame.draw.circle(glow_surf, (0, 0, 0, 160), (px, py), self_glow_r)
-    return glow_surf
-
-
 class PlayState(State):
-    """Core gameplay state: physics loop, rendering, checkpoints, and diegetic HUD."""
+    """Core gameplay state: physics loop, multi-layer rendering, Biome 1 metro cavern, and diegetic HUD."""
 
     def __init__(self, manager) -> None:
         """Construct the play state and initialise persistent subsystems."""
@@ -723,7 +684,7 @@ class PlayState(State):
                         self.recorded_score = True
 
     def render(self, surface: pygame.Surface) -> None:
-        """Render the full frame: world, lighting, diegetic HUD, and overlays."""
+        """Render the full frame: multi-layer world, Biome 1 metro cavern, lighting, diegetic HUD, and overlays."""
         interp_px, interp_py = self.player.get_interpolated_pos(self.render_alpha)
         if not self.paused:
             moving_down = (not self.player.on_ground and self.player.body.velocity.y > 60.0)
@@ -739,34 +700,53 @@ class PlayState(State):
         view_h = CANVAS_H
 
         depth_ratio = min(1.0, max(0.0, ((interp_py - 60.0) / self.world_h) * 2.5))
-        depth_key = int(depth_ratio * 30)
-        if not hasattr(self, "_cached_bg_key") or self._cached_bg_key != depth_key:
-            self._cached_bg_key = depth_key
-            if not hasattr(self, "_bg_col_surf"):
-                self._bg_col_surf = pygame.Surface((1, view_h))
-            for y in range(view_h):
-                t = y / view_h
-                cr = int((45 * (1.0 - depth_ratio) + 8 * depth_ratio) * (1.0 - t * 0.5))
-                cg = int((120 * (1.0 - depth_ratio) + 12 * depth_ratio) * (1.0 - t * 0.5))
-                cb = int((130 * (1.0 - depth_ratio) + 18 * depth_ratio) * (1.0 - t * 0.5))
-                self._bg_col_surf.set_at((0, y), (cr, cg, cb))
-        pygame.transform.scale(self._bg_col_surf, (CANVAS_W, view_h), self.play_view)
+        self.play_view.fill((20, 24, 32))
 
         start_col = max(0, int((cam_x - TILE_SIZE) // TILE_SIZE))
         end_col = min(GRID_W, int((cam_x + CANVAS_W + TILE_SIZE) // TILE_SIZE) + 1)
         start_row = max(0, int((cam_y - TILE_SIZE) // TILE_SIZE))
         end_row = min(GRID_H, int((cam_y + view_h + TILE_SIZE) // TILE_SIZE) + 1)
 
-        coin_sprites = AssetManager.get().get_sprite("coin")
-        coin_frame = coin_sprites[(self._coin_ticks // 80) % len(coin_sprites)]
+        am = AssetManager.get()
 
-        light_cutoff_sq = 95.0 * 95.0
-        player_alive = not self.player.is_dead
+        if cam_y < 80:
+            sky_rect = pygame.Rect(0, 0, CANVAS_W, max(0, int(3 * TILE_SIZE - cam_y)))
+            if sky_rect.height > 0:
+                for sy in range(sky_rect.height):
+                    ratio = sy / max(1, sky_rect.height)
+                    r = int(22 * (1.0 - ratio) + 42 * ratio)
+                    g = int(26 * (1.0 - ratio) + 48 * ratio)
+                    b = int(36 * (1.0 - ratio) + 62 * ratio)
+                    pygame.draw.line(self.play_view, (r, g, b), (0, sy), (CANVAS_W, sy))
+                try:
+                    panelki = am.get_sprite("metro_props", "panelki")
+                    px_pan = int((-cam_x * 0.25) % panelki.get_width()) - panelki.get_width()
+                    py_pan = int(3 * TILE_SIZE - cam_y - panelki.get_height())
+                    while px_pan < CANVAS_W:
+                        self.play_view.blit(panelki, (px_pan, py_pan))
+                        px_pan += panelki.get_width()
+                except Exception:
+                    pass
+
+        try:
+            bg_brick = am.get_sprite("tiles", "bg_brick")
+        except Exception:
+            bg_brick = None
 
         for y in range(start_row, end_row):
-            tile_world_y = y * TILE_SIZE + TILE_SIZE / 2.0
-            dy = tile_world_y - interp_py if player_alive else 999.0
-            dy_sq = dy * dy
+            for x in range(start_col, end_col):
+                if 0 <= x < GRID_W and 0 <= y < GRID_H:
+                    if self.level.grid[y][x] == EMPTY and y >= 4 and bg_brick is not None:
+                        rx = int(x * TILE_SIZE - cam_x)
+                        ry = int(y * TILE_SIZE - cam_y)
+                        self.play_view.blit(bg_brick, (rx, ry))
+
+        self._render_metro_props(cam_x, cam_y, am)
+
+        coin_sprites = am.get_sprite("coin")
+        coin_frame = coin_sprites[(self._coin_ticks // 80) % len(coin_sprites)]
+
+        for y in range(start_row, end_row):
             for x in range(start_col, end_col):
                 if 0 <= x < GRID_W and 0 <= y < GRID_H:
                     cell = self.level.grid[y][x]
@@ -774,30 +754,33 @@ class PlayState(State):
                         continue
                     rx = int(x * TILE_SIZE - cam_x)
                     ry = int(y * TILE_SIZE - cam_y)
-                    tile_world_x = x * TILE_SIZE + TILE_SIZE / 2.0
-                    dx = tile_world_x - interp_px if player_alive else 999.0
-                    dist_sq = dx * dx + dy_sq
-
-                    if depth_ratio > 0.4 and dist_sq > light_cutoff_sq and cell != COIN:
-                        self.play_view.fill((10, 14, 20), (rx, ry, TILE_SIZE, TILE_SIZE))
-                        continue
 
                     if cell == WALL:
                         t_name = "wall_surface" if (y == 0 or self.level.grid[y - 1][x] == EMPTY) else "wall_under"
-                        self.play_view.blit(AssetManager.get().get_sprite("tiles", t_name), (rx, ry))
+                        self.play_view.blit(am.get_sprite("tiles", t_name), (rx, ry))
                     elif cell == DIRT:
-                        self.play_view.blit(AssetManager.get().get_sprite("tiles", "dirt"), (rx, ry))
+                        self.play_view.blit(am.get_sprite("tiles", "dirt"), (rx, ry))
                     elif cell == STONE:
-                        self.play_view.blit(AssetManager.get().get_sprite("tiles", "stone"), (rx, ry))
+                        self.play_view.blit(am.get_sprite("tiles", "stone"), (rx, ry))
                     elif cell == COIN:
                         self.play_view.blit(coin_frame, (rx, ry))
+
+                    border_col = (18, 14, 20)
+                    if y > 0 and self.level.grid[y - 1][x] == EMPTY:
+                        pygame.draw.rect(self.play_view, border_col, (rx, ry, TILE_SIZE, 2))
+                    if y < GRID_H - 1 and self.level.grid[y + 1][x] == EMPTY:
+                        pygame.draw.rect(self.play_view, border_col, (rx, ry + TILE_SIZE - 2, TILE_SIZE, 2))
+                    if x > 0 and self.level.grid[y][x - 1] == EMPTY:
+                        pygame.draw.rect(self.play_view, border_col, (rx, ry, 2, TILE_SIZE))
+                    if x < GRID_W - 1 and self.level.grid[y][x + 1] == EMPTY:
+                        pygame.draw.rect(self.play_view, border_col, (rx + TILE_SIZE - 2, ry, 2, TILE_SIZE))
 
         for cabin in self.cabins:
             cabin.render(self.play_view, cam_x, cam_y)
 
-        asset_mgr = AssetManager.get()
         for rock in self.rocks:
-            rock.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha, view_w, view_h)
+            rock.render(self.play_view, cam_x, cam_y, am, self.render_alpha, view_w, view_h)
+
         self.particle_pool.render(self.play_view, cam_x, cam_y, view_w, view_h)
 
         if self.player.using_rope and self.player.hook is None:
@@ -811,7 +794,7 @@ class PlayState(State):
             dummy = HookEntity(interp_px, interp_py, aim_angle, self.space, self.player.body)
             dummy.render_preview(self.play_view, cam_x, cam_y, interp_px, interp_py, aim_angle)
 
-        self.player.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha)
+        self.player.render(self.play_view, cam_x, cam_y, am, self.render_alpha)
 
         self._render_darkness_layer(cam_x, cam_y, interp_px, interp_py, depth_ratio, start_row, end_row, start_col, end_col)
 
@@ -833,6 +816,57 @@ class PlayState(State):
         self.tutorial.render(surface)
         self.root.render(surface)
 
+    def _render_metro_props(self, cam_x: int, cam_y: int, am: AssetManager) -> None:
+        """Render Metro Station Cavern props: train car, pipes, tracks, scaffolding, and bulbs."""
+        try:
+            pipes_img = am.get_sprite("metro_props", "pipes")
+            pipes_y = int(5 * TILE_SIZE - 2 - cam_y)
+            for px in range(2 * TILE_SIZE, (GRID_W - 2) * TILE_SIZE, pipes_img.get_width()):
+                rx = int(px - cam_x)
+                if -pipes_img.get_width() <= rx <= CANVAS_W:
+                    self.play_view.blit(pipes_img, (rx, pipes_y))
+        except Exception:
+            pass
+
+        try:
+            tracks_img = am.get_sprite("metro_props", "tracks")
+            tracks_y = int(10 * TILE_SIZE - 8 - cam_y)
+            for tx in range(2 * TILE_SIZE, (GRID_W - 2) * TILE_SIZE, tracks_img.get_width()):
+                rx = int(tx - cam_x)
+                if -tracks_img.get_width() <= rx <= CANVAS_W:
+                    self.play_view.blit(tracks_img, (rx, tracks_y))
+        except Exception:
+            pass
+
+        try:
+            scaff_img = am.get_sprite("metro_props", "scaffolding")
+            scaff_x = int((GRID_W - 6) * TILE_SIZE - cam_x)
+            scaff_y = int(10 * TILE_SIZE - scaff_img.get_height() - cam_y)
+            if -scaff_img.get_width() <= scaff_x <= CANVAS_W:
+                self.play_view.blit(scaff_img, (scaff_x, scaff_y))
+        except Exception:
+            pass
+
+        try:
+            bulb_img = am.get_sprite("metro_props", "hanging_bulb")
+            bulb_xs = [8, 14, 20, 26, 32, 38]
+            bulb_y = int(5 * TILE_SIZE - 2 - cam_y)
+            for bx_tile in bulb_xs:
+                rx = int(bx_tile * TILE_SIZE + 4 - cam_x)
+                if -bulb_img.get_width() <= rx <= CANVAS_W:
+                    self.play_view.blit(bulb_img, (rx, bulb_y))
+        except Exception:
+            pass
+
+        try:
+            train_img = am.get_sprite("metro_props", "train_car")
+            train_x = int(2 * TILE_SIZE - cam_x)
+            train_y = int(10 * TILE_SIZE - train_img.get_height() - cam_y)
+            if -train_img.get_width() <= train_x <= CANVAS_W:
+                self.play_view.blit(train_img, (train_x, train_y))
+        except Exception:
+            pass
+
     def _render_darkness_layer(
         self,
         cam_x: int,
@@ -845,7 +879,7 @@ class PlayState(State):
         start_col: int,
         end_col: int,
     ) -> None:
-        """Compose the darkness + directional flashlight cone onto play_view."""
+        """Compose darkness, metro station lighting, and smooth directional headlamp cone."""
         base_alpha = min(255, int(30 + depth_ratio * 225))
         self.darkness_layer.fill((6, 8, 12, base_alpha))
 
@@ -858,6 +892,25 @@ class PlayState(State):
                         (int(x * TILE_SIZE - cam_x) - 2, int(y * TILE_SIZE - cam_y) - 2),
                         special_flags=pygame.BLEND_RGBA_SUB
                     )
+
+        bulb_xs = [8, 14, 20, 26, 32, 38]
+        bulb_y_screen = int(5 * TILE_SIZE + 10 - cam_y)
+        if -50 <= bulb_y_screen <= CANVAS_H + 50:
+            bulb_glow = self._get_or_make_bulb_glow(38)
+            for bx_tile in bulb_xs:
+                bx_s = int(bx_tile * TILE_SIZE + 10 - cam_x)
+                if -40 <= bx_s <= CANVAS_W + 40:
+                    self.darkness_layer.blit(
+                        bulb_glow,
+                        (bx_s - 38, bulb_y_screen - 38),
+                        special_flags=pygame.BLEND_RGBA_SUB,
+                    )
+
+        train_front_x = int(2 * TILE_SIZE + 140 - cam_x)
+        train_front_y = int(10 * TILE_SIZE - 28 - cam_y)
+        if -100 <= train_front_x <= CANVAS_W + 100 and -100 <= train_front_y <= CANVAS_H + 100:
+            headlight_cone = self._build_cone_mask(CANVAS_W, CANVAS_H, train_front_x, train_front_y, 0.0, 0.0, beam_length=150, beam_angle=40.0)
+            self.darkness_layer.blit(headlight_cone, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
 
         if not self.player.is_dead:
             px_s = int(interp_px - cam_x)
@@ -872,13 +925,13 @@ class PlayState(State):
                 special_flags=pygame.BLEND_RGBA_SUB,
             )
 
-            cone_surf = self._build_cone_mask(CANVAS_W, CANVAS_H, px_s, py_s, angle_rad, depth_ratio)
+            cone_surf = self._build_smooth_cone_mask(CANVAS_W, CANVAS_H, px_s, py_s, angle_rad)
             self.darkness_layer.blit(cone_surf, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
 
         self.play_view.blit(self.darkness_layer, (0, 0))
 
     def _get_or_make_coin_light(self) -> pygame.Surface:
-        """Return (or build and cache) the coin glow light mask."""
+        """Return cached coin light mask."""
         if not hasattr(self, "_coin_light_surf"):
             radius = 24
             diam = radius * 2
@@ -890,7 +943,7 @@ class PlayState(State):
         return self._coin_light_surf
 
     def _get_or_make_self_glow(self, radius: int) -> pygame.Surface:
-        """Return (or build and cache) the player self-glow circle mask."""
+        """Return cached player self-glow circle mask."""
         key = radius
         if not hasattr(self, "_self_glow_cache"):
             self._self_glow_cache: dict[int, pygame.Surface] = {}
@@ -903,6 +956,50 @@ class PlayState(State):
             self._self_glow_cache[key] = surf
         return self._self_glow_cache[key]
 
+    def _get_or_make_bulb_glow(self, radius: int) -> pygame.Surface:
+        """Return cached hanging bulb warm radial glow mask."""
+        if not hasattr(self, "_bulb_glow_surf"):
+            diam = radius * 2
+            surf = pygame.Surface((diam, diam), pygame.SRCALPHA)
+            for r in range(radius, 0, -1):
+                alpha = int(190 * ((radius - r) / radius) ** 1.3)
+                pygame.draw.circle(surf, (0, 0, 0, alpha), (radius, radius), r)
+            self._bulb_glow_surf = surf
+        return self._bulb_glow_surf
+
+    def _build_smooth_cone_mask(
+        self,
+        view_w: int,
+        view_h: int,
+        px: int,
+        py: int,
+        angle_rad: float,
+    ) -> pygame.Surface:
+        """Build smooth multi-layer warm flashlight cone with soft falloff."""
+        cone_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
+        cone_surf.fill((0, 0, 0, 0))
+
+        layers = [
+            (135, FLASHLIGHT_ANGLE * 0.55, 230),
+            (120, FLASHLIGHT_ANGLE * 0.80, 180),
+            (105, FLASHLIGHT_ANGLE * 1.05, 120),
+            (85, FLASHLIGHT_ANGLE * 1.25, 60),
+        ]
+
+        steps = 16
+        for length, angle_deg, alpha in layers:
+            half_a = math.radians(angle_deg / 2.0)
+            l_rad = angle_rad - half_a
+            r_rad = angle_rad + half_a
+            pts = [(px, py)]
+            for i in range(steps + 1):
+                a = l_rad + (r_rad - l_rad) * (i / steps)
+                pts.append((px + int(math.cos(a) * length), py + int(math.sin(a) * length)))
+            if len(pts) >= 3:
+                pygame.draw.polygon(cone_surf, (0, 0, 0, alpha), pts)
+
+        return cone_surf
+
     def _build_cone_mask(
         self,
         view_w: int,
@@ -911,10 +1008,11 @@ class PlayState(State):
         py: int,
         angle_rad: float,
         depth_ratio: float,
+        beam_length: int = 140,
+        beam_angle: float = FLASHLIGHT_ANGLE,
     ) -> pygame.Surface:
-        """Build a flashlight cone cutout surface to subtract from the darkness layer."""
-        beam_length = max(60, int(130 - depth_ratio * 50))
-        half_angle = math.radians(FLASHLIGHT_ANGLE / 2.0)
+        """Build simple directional cone mask for train headlights or distant spotters."""
+        half_angle = math.radians(beam_angle / 2.0)
         left_rad = angle_rad - half_angle
         right_rad = angle_rad + half_angle
 
@@ -934,7 +1032,7 @@ class PlayState(State):
         return cone_surf
 
     def _render_diegetic_hud(self, surface: pygame.Surface) -> None:
-        """Draw all diegetic HUD elements directly onto the canvas surface."""
+        """Draw diegetic HUD elements: canned food rations, coin counter, tool icon slot, and stamina arc."""
         self._draw_health_icons(surface)
         self._draw_ore_counter(surface)
         self._draw_tool_slot(surface)
@@ -972,18 +1070,26 @@ class PlayState(State):
         surface.blit(ts, (coin_x, coin_y))
 
     def _draw_tool_slot(self, surface: pygame.Surface) -> None:
-        """Render the active tool indicator in the bottom-left corner."""
-        tool_name = "[Rope]" if self.player.using_rope else "[Pickaxe]"
-        rope_count = ""
-        if self.player.using_rope and self.player.hook is not None and not self.player.hook.dead:
-            rope_count = " HOOKED"
-        label = tool_name + rope_count
-        ts = self.font.render(label, True, (200, 220, 255) if self.player.using_rope else (220, 200, 160))
-        bg = pygame.Surface((ts.get_width() + 6, ts.get_height() + 4), pygame.SRCALPHA)
-        bg.fill((10, 14, 20, 160))
-        pygame.draw.rect(bg, PAL_OUTLINE, bg.get_rect(), 1, border_radius=2)
-        surface.blit(bg, (2, CANVAS_H - ts.get_height() - 6))
-        surface.blit(ts, (5, CANVAS_H - ts.get_height() - 5))
+        """Render 24x24 pixel-art tool icon in bottom-left corner with status indicator."""
+        am = AssetManager.get()
+        try:
+            icon_key = "rope" if self.player.using_rope else "pickaxe"
+            tool_icon = am.get_sprite("ui_icons", icon_key)
+            slot_x = 4
+            slot_y = CANVAS_H - 28
+            surface.blit(tool_icon, (slot_x, slot_y))
+
+            if self.player.using_rope:
+                status_txt = "HOOK" if (self.player.hook and self.player.hook.attached) else "x1"
+                ts = self.font.render(status_txt, True, (220, 240, 255))
+                surface.blit(ts, (slot_x + 28, slot_y + 6))
+            else:
+                ts = self.font.render("[Q]", True, (180, 190, 205))
+                surface.blit(ts, (slot_x + 28, slot_y + 6))
+        except Exception:
+            tool_name = "[Rope]" if self.player.using_rope else "[Pickaxe]"
+            ts = self.font.render(tool_name, True, (220, 200, 160))
+            surface.blit(ts, (4, CANVAS_H - 18))
 
     def _draw_stamina_arc(self, surface: pygame.Surface) -> None:
         """Render a contextual arc stamina indicator beside the cat when stamina < 100%."""
@@ -995,7 +1101,6 @@ class PlayState(State):
         radius = 7
         ratio = max(0.0, min(1.0, self.player.stamina / 100.0))
         start_angle = -math.pi / 2
-        end_angle = start_angle + ratio * math.pi * 2
         steps = 16
         bg_pts = []
         fg_pts = []

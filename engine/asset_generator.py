@@ -13,18 +13,24 @@ class AssetGenerator:
 
     @staticmethod
     def generate_all() -> None:
-        """Generate all game assets: tiles, coins, player skins, and cat miner."""
+        """Generate all game assets if missing without overwriting existing files."""
         os.makedirs("assets/spritesheets", exist_ok=True)
         os.makedirs("assets/data", exist_ok=True)
-        AssetGenerator.generate_tiles()
-        AssetGenerator.generate_coin()
+        if not (os.path.exists("assets/spritesheets/tiles.png") and os.path.exists("assets/data/tiles.json")):
+            AssetGenerator.generate_tiles()
+        if not (os.path.exists("assets/spritesheets/coin.png") and os.path.exists("assets/data/coin.json")):
+            AssetGenerator.generate_coin()
         for skin_id, palette in SKIN_PALETTES.items():
-            AssetGenerator.generate_player_skin(skin_id, palette)
-        AssetGenerator.generate_cat_miner()
+            if not (os.path.exists(f"assets/spritesheets/player_{skin_id}.png") and os.path.exists(f"assets/data/player_{skin_id}.json")):
+                AssetGenerator.generate_player_skin(skin_id, palette)
+        if not (os.path.exists(f"assets/spritesheets/cat_{CAT_MINER_ID}.png") and os.path.exists(f"assets/data/cat_{CAT_MINER_ID}.json")):
+            AssetGenerator.generate_cat_miner()
 
     @staticmethod
-    def generate_tiles() -> None:
-        """Generate the tile spritesheet containing wall, dirt, rock, and stone tiles."""
+    def generate_tiles(force: bool = False) -> None:
+        """Generate the tile spritesheet containing wall, dirt, rock, and stone tiles if missing."""
+        if not force and os.path.exists("assets/spritesheets/tiles.png") and os.path.exists("assets/data/tiles.json"):
+            return
         sheet = pygame.Surface((TILE_SIZE * 4, TILE_SIZE), pygame.SRCALPHA)
         wall_under = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
         wall_under.fill((48, 42, 54))
@@ -111,8 +117,10 @@ class AssetGenerator:
             json.dump(meta, f, indent=2)
 
     @staticmethod
-    def generate_coin() -> None:
-        """Generate a spinning coin animation spritesheet."""
+    def generate_coin(force: bool = False) -> None:
+        """Generate a spinning coin animation spritesheet if missing."""
+        if not force and os.path.exists("assets/spritesheets/coin.png") and os.path.exists("assets/data/coin.json"):
+            return
         num_frames = 10
         sheet = pygame.Surface((TILE_SIZE * num_frames, TILE_SIZE), pygame.SRCALPHA)
         frames_meta = []
@@ -154,8 +162,10 @@ class AssetGenerator:
             json.dump(meta, f, indent=2)
 
     @staticmethod
-    def generate_player_skin(skin_id: str, pal: dict) -> None:
-        """Generate a legacy human miner player skin spritesheet."""
+    def generate_player_skin(skin_id: str, pal: dict, force: bool = False) -> None:
+        """Generate a legacy human miner player skin spritesheet if missing."""
+        if not force and os.path.exists(f"assets/spritesheets/player_{skin_id}.png") and os.path.exists(f"assets/data/player_{skin_id}.json"):
+            return
         fw = TILE_SIZE + 8
         fh = TILE_SIZE + 4
         total_frames = 20
@@ -317,7 +327,10 @@ class AssetGenerator:
         return surf
 
     @staticmethod
-    def generate_cat_miner() -> None:
+    def generate_cat_miner(force: bool = False) -> None:
+        """Generate the Tabby Miner Cat spritesheet if missing."""
+        if not force and os.path.exists(f"assets/spritesheets/cat_{CAT_MINER_ID}.png") and os.path.exists(f"assets/data/cat_{CAT_MINER_ID}.json"):
+            return
         """Generate the Tabby Miner Cat spritesheet with all mandatory animation states.
 
         Frame layout (37 total frames, each CAT_FRAME_W x CAT_FRAME_H):

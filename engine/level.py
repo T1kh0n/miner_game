@@ -6,8 +6,12 @@ MAX_JUMP_TILES_VERTICAL = 2
 MAX_JUMP_TILES_HORIZONTAL = 3
 MAX_CLIMB_TILES_CONTINUOUS = 12
 
+
 class Level:
+    """Procedural cavern map generator with guaranteed passability and Biome 1 metro cavern."""
+
     def __init__(self, w: int = GRID_W, h: int = GRID_H, seed: int | None = None) -> None:
+        """Initialise map dimensions, seed, and generate grid."""
         self.w = w
         self.h = h
         self.seed = seed if seed is not None else random.randint(1, 999999)
@@ -16,9 +20,11 @@ class Level:
         self.spawn_y = 0.0
         self.total_coins = 0
         self.cabin_locations: list[tuple[int, int, str]] = []
+        self.metro_cavern_rect = (2, 5, self.w - 4, 5)
         self.generate()
 
     def generate(self) -> None:
+        """Generate surface skyline, Biome 1 metro cavern, and deep procedurally carved caves."""
         random.seed(self.seed)
         visited = [[False for _ in range(self.w)] for _ in range(self.h)]
         center_x = self.w // 2
@@ -43,15 +49,27 @@ class Level:
 
         for sx in range(center_x - 1, center_x + 2):
             self.grid[3][sx] = EMPTY
-            self.grid[4][sx] = DIRT
+            self.grid[4][sx] = EMPTY
             visited[3][sx] = True
             visited[4][sx] = True
 
         spine_path: list[tuple[int, int]] = [(spawn_grass_x, 3), (center_x, 3), (center_x, 4)]
         spine_set: set[tuple[int, int]] = set(spine_path)
 
+        for my in range(5, 10):
+            for mx in range(2, self.w - 2):
+                self.grid[my][mx] = EMPTY
+                visited[my][mx] = True
+                spine_set.add((mx, my))
+
+        for mx in range(2, self.w - 2):
+            self.grid[4][mx] = WALL
+            self.grid[10][mx] = DIRT
+            visited[4][mx] = True
+            visited[10][mx] = True
+
         cur_x = center_x
-        for y in range(4, self.h - 2):
+        for y in range(10, self.h - 2):
             cur_x = max(3, min(self.w - 4, cur_x + random.choice([-1, 0, 1, 0])))
             for dx in range(-1, 2):
                 self.grid[y][cur_x + dx] = DIRT
@@ -67,20 +85,20 @@ class Level:
                         bx += direction
                         if not (1 < bx < self.w - 2):
                             break
-                        by = max(4, min(self.h - 4, by + random.choice([-1, 0, 1, 0])))
+                        by = max(10, min(self.h - 4, by + random.choice([-1, 0, 1, 0])))
                         for ty in range(2):
                             self.grid[by + ty][bx] = DIRT
                             visited[by + ty][bx] = True
                         if random.random() < 0.22:
                             for rx in range(bx - 1, bx + 2):
                                 for ry in range(by - 1, by + 2):
-                                    if 0 < rx < self.w - 1 and 3 < ry < self.h - 1:
+                                    if 0 < rx < self.w - 1 and 9 < ry < self.h - 1:
                                         self.grid[ry][rx] = EMPTY if random.random() < 0.55 else DIRT
                                         visited[ry][rx] = True
 
         for _ in range(16):
             cliff_x = random.randint(4, self.w - 5)
-            cliff_y_start = random.randint(8, self.h - 25)
+            cliff_y_start = random.randint(12, self.h - 25)
             cliff_h = random.randint(8, 22)
             cliff_w = random.randint(1, 2)
             for dy in range(cliff_h):
@@ -99,7 +117,7 @@ class Level:
                             self.grid[cy][cx + 1] = EMPTY
                             visited[cy][cx + 1] = True
 
-        for y in range(4, self.h - 2):
+        for y in range(10, self.h - 2):
             for x in range(1, self.w - 1):
                 if visited[y][x] and self.grid[y][x] == DIRT and (x, y) not in spine_set:
                     if random.random() < 0.22:
@@ -130,7 +148,7 @@ class Level:
 
         valid_nodes = [
             (x, y) for (x, y) in reachable
-            if y > 4 and self.grid[y][x] in (DIRT, EMPTY) and (x, y) not in cabin_coords and (x, y) not in spine_set
+            if y > 10 and self.grid[y][x] in (DIRT, EMPTY) and (x, y) not in cabin_coords and (x, y) not in spine_set
         ]
         random.shuffle(valid_nodes)
 
@@ -148,6 +166,7 @@ class Level:
             self.total_coins += 1
 
     def compute_reachable_set(self, start_x: int) -> set[tuple[int, int]]:
+        """Compute set of all coordinates reachable through EMPTY and DIRT tiles from spawn."""
         start_node = (start_x, 3)
         q = deque([start_node])
         reachable = {start_node}
@@ -162,6 +181,7 @@ class Level:
         return reachable
 
     def ensure_guaranteed_passability(self, start_x: int, center_x: int) -> bool:
+        """Evaluate flood fill reachability and carve bypass corridor if blocked."""
         target_bottom_y = self.h - 4
         reachable = self.compute_reachable_set(start_x)
         max_reached_y = max((y for _, y in reachable), default=3)
