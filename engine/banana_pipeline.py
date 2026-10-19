@@ -24,27 +24,53 @@ def normalize_frame(
     clean_crop: Image.Image,
     target_w: int = 36,
     target_h: int = 36,
-    baseline_pad: int = 2,
+    target_center_x: int = 18,
+    target_foot_y: int = 33,
     y_shift: int = 0,
+    x_shift: int = 0,
     scale_x: float = 1.0,
     scale_y: float = 1.0,
 ) -> Image.Image:
-    """Crop non-empty content, scale with Image.NEAREST, and align to bottom baseline."""
+    """Anchor-normalize sprite frame by anchoring feet baseline and central torso axis."""
     bbox = clean_crop.getbbox()
     if bbox:
         clean_crop = clean_crop.crop(bbox)
     w, h = clean_crop.size
-    max_h = target_h - baseline_pad - 2
-    max_w = target_w - 4
-    scale = min(max_w / max(1, w), max_h / max(1, h))
+
+    scale = 30.0 / max(1, h)
     nw = max(1, int(w * scale * scale_x))
     nh = max(1, int(h * scale * scale_y))
     resized = clean_crop.resize((nw, nh), Image.Resampling.NEAREST)
+
+    arr = np.array(resized)
+    alpha = arr[:, :, 3]
+    y_idx, x_idx = np.where(alpha > 50)
+    if len(y_idx) == 0:
+        return Image.new("RGBA", (target_w, target_h), (0, 0, 0, 0))
+
+    foot_y = int(np.max(y_idx))
+    leg_y_thresh = foot_y - max(2, int(nh * 0.22))
+    leg_mask = (y_idx >= leg_y_thresh)
+    if np.any(leg_mask):
+        char_cx = int(np.mean(x_idx[leg_mask]))
+    else:
+        char_cx = nw // 2
+
     out = Image.new("RGBA", (target_w, target_h), (0, 0, 0, 0))
-    paste_x = (target_w - nw) // 2
-    paste_y = target_h - baseline_pad - nh + y_shift
-    paste_y = max(0, min(target_h - nh, paste_y))
-    out.paste(resized, (paste_x, paste_y), resized)
+    paste_x = target_center_x - char_cx + x_shift
+    paste_y = target_foot_y - foot_y + y_shift
+
+    src_x1 = max(0, -paste_x)
+    src_y1 = max(0, -paste_y)
+    dst_x1 = max(0, paste_x)
+    dst_y1 = max(0, paste_y)
+
+    copy_w = min(nw - src_x1, target_w - dst_x1)
+    copy_h = min(nh - src_y1, target_h - dst_y1)
+
+    if copy_w > 0 and copy_h > 0:
+        cropped_piece = resized.crop((src_x1, src_y1, src_x1 + copy_w, src_y1 + copy_h))
+        out.paste(cropped_piece, (dst_x1, dst_y1), cropped_piece)
     return out
 
 
@@ -115,47 +141,48 @@ def process_cat_miner(
         frames_dict[f"run_{i}"] = normalize_frame(
             chroma_key(raw.crop(box)),
             CAT_FRAME_W, CAT_FRAME_H,
-            scale_x=1.04, scale_y=0.96,
+            x_shift=1,
             y_shift=(-1 if i % 2 == 1 else 0),
         )
 
     frames_dict["jump_0"] = normalize_frame(
         chroma_key(raw.crop(idle_boxes[0])),
         CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=0.92, scale_y=1.12,
-        y_shift=-3,
+        scale_x=0.96, scale_y=1.06,
+        y_shift=-2,
     )
     frames_dict["jump_1"] = normalize_frame(
         chroma_key(raw.crop(idle_boxes[1])),
         CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=0.95, scale_y=1.08,
-        y_shift=-2,
+        scale_x=0.98, scale_y=1.04,
+        y_shift=-1,
     )
 
     frames_dict["fall_0"] = normalize_frame(
         chroma_key(raw.crop(idle_boxes[2])),
         CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=1.05, scale_y=0.95,
-        y_shift=1,
+        scale_x=1.02, scale_y=0.98,
+        y_shift=0,
     )
     frames_dict["fall_1"] = normalize_frame(
         chroma_key(raw.crop(idle_boxes[3])),
         CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=1.08, scale_y=0.92,
-        y_shift=2,
+        scale_x=1.04, scale_y=0.96,
+        y_shift=1,
     )
 
     frames_dict["land_0"] = normalize_frame(
         chroma_key(raw.crop(idle_boxes[0])),
         CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=1.18, scale_y=0.82,
-        y_shift=3,
+        scale_x=1.08, scale_y=0.92,
+        y_shift=1,
     )
 
     for i, box in enumerate(action_boxes):
         frames_dict[f"action_{i}"] = normalize_frame(
             chroma_key(raw.crop(box)),
             CAT_FRAME_W, CAT_FRAME_H,
+            y_shift=0,
         )
 
     for i, box in enumerate(climb_boxes):
@@ -169,7 +196,7 @@ def process_cat_miner(
         frames_dict[f"hurt_{i}"] = normalize_frame(
             chroma_key(raw.crop(box)),
             CAT_FRAME_W, CAT_FRAME_H,
-            y_shift=-1,
+            y_shift=0,
         )
 
     for i in range(4):
@@ -239,7 +266,7 @@ def process_cat_miner(
         "texture": os.path.basename(out_sheet),
         "frame_width": CAT_FRAME_W,
         "frame_height": CAT_FRAME_H,
-        "collider": {"w": 12, "h": 26, "offset_x": 0, "offset_y": 5},
+        "collider": {"w": 12, "h": 26, "offset_x": 18, "offset_y": 21},
         "frames": frames_meta,
     }
     with open(out_meta, "w", encoding="utf-8") as f:

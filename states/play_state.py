@@ -128,6 +128,7 @@ class PlayState(State):
         self.particle_pool = ParticlePool(180)
         self.particles = self.particle_pool.particles
         self.cabins: list[CabinEntity] = []
+        self.mouse_canvas_pos: tuple[int, int] = (CANVAS_W // 2, CANVAS_H // 2)
 
         self._afk_knock_emitted = False
         self._afk_blind_emitted = False
@@ -145,12 +146,14 @@ class PlayState(State):
         canvas_rect = pygame.Rect(0, 0, CANVAS_W, CANVAS_H)
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
 
-        self.panel_over = UIPanel(0.5, 0.5, 190, 84, border_color=COLOR_DANGER)
+        self.panel_over = UIPanel(0.5, 0.5, 210, 84, border_color=COLOR_DANGER)
         self.death_label = UILabel(0.5, 0.28, self.loc.get_text("death_cave_in", "CAVE-IN COLLAPSE"), self.font_big, COLOR_DANGER)
         self.panel_over.add_child(self.death_label)
-        self.btn_over_restart = UIButton(0.25, 0.75, 68, 20, self.loc.get_text("btn_restart", "RESTART"), self.font, self.respawn_at_checkpoint)
+        self.btn_over_checkpoint = UIButton(0.20, 0.75, 66, 18, self.loc.get_text("btn_checkpoint", "CHECKPOINT"), self.font, self.respawn_at_checkpoint)
+        self.panel_over.add_child(self.btn_over_checkpoint)
+        self.btn_over_restart = UIButton(0.53, 0.75, 54, 18, self.loc.get_text("btn_restart", "RESTART"), self.font, self._full_restart)
         self.panel_over.add_child(self.btn_over_restart)
-        self.btn_over_menu = UIButton(0.75, 0.75, 68, 20, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
+        self.btn_over_menu = UIButton(0.82, 0.75, 48, 18, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
         self.panel_over.add_child(self.btn_over_menu)
         self.panel_over.visible = False
         self.root.add_child(self.panel_over)
@@ -165,18 +168,20 @@ class PlayState(State):
         self.panel_won.visible = False
         self.root.add_child(self.panel_won)
 
-        self.panel_pause = UIPanel(0.5, 0.5, 190, 134, border_color=(100, 150, 255))
-        self.lbl_pause = UILabel(0.5, 0.12, self.loc.get_text("pause_title", "PAUSED"), self.font_big, (100, 150, 255))
+        self.panel_pause = UIPanel(0.5, 0.5, 190, 144, border_color=(100, 150, 255))
+        self.lbl_pause = UILabel(0.5, 0.10, self.loc.get_text("pause_title", "PAUSED"), self.font_big, (100, 150, 255))
         self.panel_pause.add_child(self.lbl_pause)
-        self.btn_pause_resume = UIButton(0.5, 0.32, 140, 20, self.loc.get_text("btn_resume", "RESUME"), self.font, self._unpause)
+        self.btn_pause_resume = UIButton(0.5, 0.25, 140, 18, self.loc.get_text("btn_resume", "RESUME"), self.font, self._unpause)
         self.panel_pause.add_child(self.btn_pause_resume)
-        self.btn_pause_lang = UIButton(0.5, 0.51, 140, 20, self.loc.get_text("ui_lang", "LANG: EN"), self.font, self._toggle_lang)
+        self.btn_pause_checkpoint = UIButton(0.5, 0.41, 140, 18, self.loc.get_text("btn_checkpoint", "CHECKPOINT"), self.font, self.respawn_at_checkpoint)
+        self.panel_pause.add_child(self.btn_pause_checkpoint)
+        self.btn_pause_lang = UIButton(0.5, 0.57, 140, 18, self.loc.get_text("ui_lang", "LANG: EN"), self.font, self._toggle_lang)
         self.panel_pause.add_child(self.btn_pause_lang)
-        self.btn_pause_hints = UIButton(0.5, 0.70, 140, 20, self.loc.get_text("btn_reset_hints", "RESET HINTS"), self.font, self._reset_hints)
+        self.btn_pause_hints = UIButton(0.5, 0.73, 140, 18, self.loc.get_text("btn_reset_hints", "RESET HINTS"), self.font, self._reset_hints)
         self.panel_pause.add_child(self.btn_pause_hints)
-        self.btn_pause_restart = UIButton(0.25, 0.88, 68, 20, self.loc.get_text("btn_restart", "RESTART"), self.font, self.enter)
+        self.btn_pause_restart = UIButton(0.25, 0.89, 68, 18, self.loc.get_text("btn_restart", "RESTART"), self.font, self._full_restart)
         self.panel_pause.add_child(self.btn_pause_restart)
-        self.btn_pause_menu = UIButton(0.75, 0.88, 68, 20, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
+        self.btn_pause_menu = UIButton(0.75, 0.89, 68, 18, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
         self.panel_pause.add_child(self.btn_pause_menu)
         self.panel_pause.visible = False
         self.root.add_child(self.panel_pause)
@@ -199,9 +204,17 @@ class PlayState(State):
         if self.last_checkpoint_snapshot is not None:
             self.last_checkpoint_snapshot.progression.seen_hints = []
 
+    def _full_restart(self) -> None:
+        """Completely reset the gameplay session from spawn."""
+        self.last_checkpoint_snapshot = None
+        self.save_manager.delete_slot(self.active_slot_index)
+        self.enter()
+
     def _refresh_strings(self) -> None:
         """Re-apply localised strings to all UI labels after a locale change."""
+        self.btn_over_checkpoint.set_text(self.loc.get_text("btn_checkpoint", "CHECKPOINT"))
         self.btn_over_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
+        self.btn_pause_checkpoint.set_text(self.loc.get_text("btn_checkpoint", "CHECKPOINT"))
         self.btn_over_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
         self.lbl_won.set_text(self.loc.get_text("win_title", "VICTORY!"))
         self.btn_won_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
@@ -297,7 +310,7 @@ class PlayState(State):
         if skin not in ("miner",):
             skin = CAT_MINER_ID
         spawn_x, spawn_y = self.level.spawn_x, self.level.spawn_y
-        self.player = Player(spawn_x, spawn_y, skin, self.space)
+        self.player = Player(spawn_x, spawn_y, skin, self.space, AssetManager.get())
         self.player.death_key = "death_cave_in"
 
         rock_map = {r.shape: r for r in self.rocks}
@@ -314,7 +327,11 @@ class PlayState(State):
             rock = data["rock_map"].get(rock_shape)
             if rock:
                 rock.restore_velocity()
-            if arbiter.total_impulse.length > 2500:
+            p = data["player"]
+            is_falling_crush = False
+            if rock and rock.body.velocity.y > 45.0 and rock.body.position.y < p.body.position.y:
+                is_falling_crush = True
+            if arbiter.total_impulse.length > 1200 or is_falling_crush:
                 p = data["player"]
                 if not p.is_dead:
                     p.is_dead = True
@@ -353,6 +370,13 @@ class PlayState(State):
         }
         self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=shared_data)
         self.space.on_collision(3, 1, post_solve=post_solve_wall, data=shared_data)
+
+        if getattr(self.manager, "load_saved_checkpoint", False):
+            setattr(self.manager, "load_saved_checkpoint", False)
+            existing_slot = self.save_manager.load_slot(self.active_slot_index)
+            if existing_slot is not None and existing_slot.progression.checkpoint_id:
+                self.last_checkpoint_snapshot = existing_slot
+                self.respawn_at_checkpoint()
 
     def add_static_tile(self, tx: int, ty: int) -> None:
         """Register a static physics tile shape for the tile at (tx, ty)."""
@@ -404,6 +428,15 @@ class PlayState(State):
                 if (dig_x, dig_y) in self.tile_shapes:
                     self.space.remove(self.tile_shapes[(dig_x, dig_y)])
                     del self.tile_shapes[(dig_x, dig_y)]
+                for rock in self.rocks:
+                    rx = rock.body.position.x
+                    ry = rock.body.position.y
+                    tile_cx = dig_x * TILE_SIZE + TILE_SIZE / 2.0
+                    if abs(rx - tile_cx) < TILE_SIZE * 1.8:
+                        if (dig_y - 3) * TILE_SIZE <= ry <= (dig_y + 1) * TILE_SIZE:
+                            rock.body.activate()
+                            if abs(rx - tile_cx) < TILE_SIZE * 0.8 and ry < dig_y * TILE_SIZE:
+                                rock.body.apply_impulse_at_local_point((0.0, 30.0), (0.0, 0.0))
                 self._events.emit(EVT_BLOCK_BREAK, x=dig_x, y=dig_y)
                 self._audio.play("pickaxe_clink")
                 self.tutorial.fire("mine_dirt", "Dirt cleared! Watch for falling rocks above.")
@@ -448,8 +481,12 @@ class PlayState(State):
     def respawn_at_checkpoint(self) -> None:
         """Restore player state from the last checkpoint snapshot."""
         if self.last_checkpoint_snapshot is None:
-            self.enter()
-            return
+            existing_slot = self.save_manager.load_slot(self.active_slot_index)
+            if existing_slot is not None and existing_slot.progression.checkpoint_id:
+                self.last_checkpoint_snapshot = existing_slot
+            else:
+                self.enter()
+                return
 
         snap = self.last_checkpoint_snapshot
         self.player.is_dead = False
@@ -502,9 +539,20 @@ class PlayState(State):
                 mode = "Rope" if self.player.using_rope else "Pickaxe"
                 self.tutorial.fire(f"tool_{mode.lower()}", f"Tool: {mode}")
 
+        if mouse_pos:
+            self.mouse_canvas_pos = mouse_pos
+
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_r, 1082, 1050):
-                self.enter()
+                if self.last_checkpoint_snapshot is not None:
+                    self.respawn_at_checkpoint()
+                else:
+                    existing_slot = self.save_manager.load_slot(self.active_slot_index)
+                    if existing_slot is not None and existing_slot.progression.checkpoint_id:
+                        self.last_checkpoint_snapshot = existing_slot
+                        self.respawn_at_checkpoint()
+                    else:
+                        self.enter()
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.player.using_rope and not self.paused and not self.game_over and not self.game_won:
@@ -784,10 +832,7 @@ class PlayState(State):
         self.particle_pool.render(self.play_view, cam_x, cam_y, view_w, view_h)
 
         if self.player.using_rope and self.player.hook is None:
-            mx, my = pygame.mouse.get_pos()
-            scale = surface.get_width() / CANVAS_W
-            mx_canvas = int(mx / scale)
-            my_canvas = int(my / scale)
+            mx_canvas, my_canvas = getattr(self.manager, "mouse_pos", self.mouse_canvas_pos)
             px_screen = int(interp_px - cam_x)
             py_screen = int(interp_py - cam_y)
             aim_angle = math.atan2(my_canvas - py_screen, mx_canvas - px_screen)
@@ -915,7 +960,9 @@ class PlayState(State):
         if not self.player.is_dead:
             px_s = int(interp_px - cam_x)
             py_s = int(interp_py - cam_y)
-            angle_rad = self.player.get_flashlight_angle_rad()
+            mx_canvas, my_canvas = getattr(self.manager, "mouse_pos", self.mouse_canvas_pos)
+            cursor_angle = math.atan2(my_canvas - py_s, mx_canvas - px_s)
+            angle_rad = self.player.get_flashlight_angle_rad(cursor_angle)
 
             glow_r = FLASHLIGHT_SELF_GLOW
             self_glow_surf = self._get_or_make_self_glow(glow_r)

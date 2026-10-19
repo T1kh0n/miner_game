@@ -25,6 +25,26 @@ def get_cached_particle_surface(color: tuple[int, int, int], alpha: int, size: i
     return surf
 
 
+def calculate_sprite_hitbox(
+    surf: pygame.Surface,
+    target_w: float = 12.0,
+    target_h: float = 26.0,
+) -> tuple[float, float, float, float]:
+    """Calculate (w, h, offset_x, offset_y) bounding box from sprite alpha mask."""
+    mask = pygame.mask.from_surface(surf)
+    rects = mask.get_bounding_rects()
+    if not rects:
+        return target_w, target_h, surf.get_width() / 2.0, surf.get_height() / 2.0
+    union_rect = rects[0]
+    for r in rects[1:]:
+        union_rect.union_ip(r)
+    h = min(target_h, float(union_rect.h))
+    w = min(target_w, float(union_rect.w))
+    offset_x = float(union_rect.centerx)
+    offset_y = float(union_rect.bottom) - h / 2.0
+    return w, h, offset_x, offset_y
+
+
 class Particle:
     """Single pooled particle with linear velocity and lifetime."""
 
@@ -201,13 +221,7 @@ class CabinEntity:
 
 
 class HookEntity:
-    """Grappling hook projectile with SlideJoint rope physics.
-
-    When launched it travels in a parabolic arc; on contact with a static or
-    dynamic body a ``pymunk.SlideJoint`` is created between the player body and
-    the hit body so the cat can swing or climb.  If the target body is a
-    ``RockEntity``, the weight of the cat pulls the boulder free.
-    """
+    """Grappling hook projectile with SlideJoint rope physics and pickaxe anchor."""
 
     MAX_SPEED = 280.0
     GRAVITY_ACCEL = 300.0
@@ -259,6 +273,8 @@ class HookEntity:
         self.y = hy
         self.attached = True
         self.attached_body = target_body
+        if target_body.body_type == pymunk.Body.DYNAMIC:
+            target_body.activate()
         dist = math.hypot(
             self.player_body.position.x - hx,
             self.player_body.position.y - hy,
@@ -321,7 +337,7 @@ class HookEntity:
             prev_sx, prev_sy = sx, sy
 
     def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, from_x: float, from_y: float) -> None:
-        """Draw the rope line from player to hook tip or attached point."""
+        """Draw the rope line with pickaxe projectile tip or anchor."""
         if self.dead:
             return
         hx = int(self.x - cam_x)
@@ -330,22 +346,49 @@ class HookEntity:
         fy = int(from_y - cam_y)
         pygame.draw.line(surface, (180, 148, 100), (fx, fy), (hx, hy), 1)
         if self.attached:
+            ang = math.atan2(hy - fy, hx - fx)
+            hx_tail = hx - int(math.cos(ang) * 6)
+            hy_tail = hy - int(math.sin(ang) * 6)
+            pygame.draw.line(surface, (130, 80, 40), (hx_tail, hy_tail), (hx, hy), 2)
+            blade_dx = int(-math.sin(ang) * 4)
+            blade_dy = int(math.cos(ang) * 4)
+            pygame.draw.line(surface, (180, 190, 205), (hx - blade_dx, hy - blade_dy), (hx + blade_dx, hy + blade_dy), 2)
+            pygame.draw.circle(surface, (235, 245, 255), (hx + blade_dx, hy + blade_dy), 1)
             pygame.draw.circle(surface, (220, 200, 140), (hx, hy), 2)
         else:
-            pygame.draw.circle(surface, (200, 180, 100), (hx, hy), 2)
+            ang = math.atan2(self.vy, self.vx)
+            hx_tail = hx - int(math.cos(ang) * 6)
+            hy_tail = hy - int(math.sin(ang) * 6)
+            pygame.draw.line(surface, (130, 80, 40), (hx_tail, hy_tail), (hx, hy), 2)
+            blade_dx = int(-math.sin(ang) * 4)
+            blade_dy = int(math.cos(ang) * 4)
+            pygame.draw.line(surface, (180, 190, 205), (hx - blade_dx, hy - blade_dy), (hx + blade_dx, hy + blade_dy), 2)
+            pygame.draw.circle(surface, (235, 245, 255), (hx + blade_dx, hy + blade_dy), 1)
 
 
 class Player:
     """Tabby Miner Cat player entity with pymunk physics, rope tool, and AFK system."""
 
-    def __init__(self, x: float, y: float, skin_id: str, space: pymunk.Space) -> None:
+    def __init__(self, x: float, y: float, skin_id: str, space: pymunk.Space, asset_mgr: AssetManager | None = None) -> None:
         """Initialise player at world position (x, y) with the given skin identifier."""
         self.skin_id = skin_id
 
-        self.w = PLAYER_BODY_W
-        self.h = PLAYER_BODY_H
-        self.offset_x = CAT_FRAME_W // 2
-        self.offset_y = int(CAT_FRAME_H * 0.75)
+        if asset_mgr is not None:
+            try:
+                idle_surf = asset_mgr.get_sprite(f"cat_{skin_id}", "idle_0")
+                self.w, self.h, self.offset_x, self.offset_y = calculate_sprite_hitbox(
+                    idle_surf, PLAYER_BODY_W, PLAYER_BODY_H
+                )
+            except Exception:
+                self.w = PLAYER_BODY_W
+                self.h = PLAYER_BODY_H
+                self.offset_x = CAT_FRAME_W / 2.0
+                self.offset_y = 21.0
+        else:
+            self.w = PLAYER_BODY_W
+            self.h = PLAYER_BODY_H
+            self.offset_x = CAT_FRAME_W / 2.0
+            self.offset_y = 21.0
 
         self.is_dead = False
         self.death_reason = ""
@@ -381,7 +424,7 @@ class Player:
         self._land_frame_timer = 0.0
 
         mass = 5.0
-        self.body = pymunk.Body(mass, float('inf'))
+        self.body = pymunk.Body(mass, float("inf"))
         self.body.position = (x, y)
         self.prev_x = float(x)
         self.prev_y = float(y)
@@ -441,8 +484,10 @@ class Player:
         else:
             return (cx - reach_x, cy - hh, cx - hw, cy + hh)
 
-    def get_flashlight_angle_rad(self) -> float:
-        """Return the flashlight beam angle based on facing direction and rope aim."""
+    def get_flashlight_angle_rad(self, cursor_angle: float | None = None) -> float:
+        """Return the flashlight beam angle based on cursor aim or facing direction."""
+        if cursor_angle is not None:
+            return cursor_angle
         if self.hook is not None and not self.hook.attached and not self.hook.dead:
             return self.rope_angle
         return 0.0 if self.facing_right else math.pi
@@ -535,7 +580,7 @@ class Player:
         for info in space.shape_query(self.shape):
             if info.shape == self.shape:
                 continue
-            if getattr(info.shape, 'sensor', False):
+            if getattr(info.shape, "sensor", False):
                 continue
             n = info.contact_point_set.normal
             if n.y > 0.5:
@@ -590,17 +635,29 @@ class Player:
                 self.hook = None
             elif self.hook is not None and self.hook.attached:
                 if up:
-                    self.hook.shorten(60.0 * dt)
+                    self.hook.shorten(65.0 * dt)
+                    hx, hy = self.hook.x, self.hook.y
+                    dx = hx - self.body.position.x
+                    dy = hy - self.body.position.y
+                    dlen = math.hypot(dx, dy)
+                    if dlen > 1.0:
+                        self.body.apply_force_at_local_point((dx / dlen * 180.0, dy / dlen * 180.0), (0.0, 0.0))
                 if down:
-                    self.hook.lengthen(60.0 * dt)
+                    self.hook.lengthen(65.0 * dt)
+                if self.hook.attached_body is not None and self.hook.attached_body.body_type == pymunk.Body.DYNAMIC:
+                    self.hook.attached_body.activate()
 
-        target_vx = move_axis * 110.0
-        current_vx = self.body.velocity.x
-        accel = 0.2 if self.on_ground else 0.1
-        self.body.velocity = (
-            current_vx + (target_vx - current_vx) * accel,
-            self.body.velocity.y
-        )
+        if self.hook is not None and self.hook.attached:
+            self.body.apply_force_at_local_point((move_axis * 350.0, 0.0), (0.0, 0.0))
+            self.body.velocity = (self.body.velocity.x * 0.992, self.body.velocity.y * 0.995)
+        else:
+            target_vx = move_axis * 110.0
+            current_vx = self.body.velocity.x
+            accel = 0.2 if self.on_ground else 0.1
+            self.body.velocity = (
+                current_vx + (target_vx - current_vx) * accel,
+                self.body.velocity.y
+            )
 
         half_h = self.h / 2
         if jump and self.on_ground:
@@ -664,8 +721,8 @@ class Player:
             ox = sprite.get_width() - ox
 
         ix, iy = self.get_interpolated_pos(alpha)
-        rx = int(ix - cam_x) - ox
-        ry = int(iy - cam_y) - oy
+        rx = int(ix - cam_x) - int(ox)
+        ry = int(iy - cam_y) - int(oy)
         surface.blit(sprite, (rx, ry))
 
         if self.hook is not None:

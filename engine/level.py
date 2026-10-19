@@ -146,6 +146,18 @@ class Level:
             cabin_coords.add((best_x, best_y))
             cabin_coords.add((best_x, best_y - 1))
 
+        ceiling_candidates = [
+            (x, y) for (x, y) in reachable
+            if 5 < y < self.h - 5 and (x, y) not in cabin_coords and (x, y) not in spine_set
+            and self.grid[y][x] == DIRT
+            and (self.grid[y + 1][x] in (EMPTY, DIRT))
+        ]
+        random.shuffle(ceiling_candidates)
+        ceiling_rock_count = min(15, len(ceiling_candidates))
+        for i in range(ceiling_rock_count):
+            cx, cy = ceiling_candidates[i]
+            self.grid[cy][cx] = ROCK
+
         valid_nodes = [
             (x, y) for (x, y) in reachable
             if y > 10 and self.grid[y][x] in (DIRT, EMPTY) and (x, y) not in cabin_coords and (x, y) not in spine_set

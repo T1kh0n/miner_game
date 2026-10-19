@@ -31,5 +31,7 @@
   "hint_mine_dirt": "Dig dirt blocks around you to uncover paths and coins.",
   "hint_coin": "Collect all coins to win the cavern expedition!",
   "hint_checkpoint": "Checkpoint saved! Progress secured.",
-  "hints_reset_done": "Tutorial hints have been reset."
+  "hints_reset_done": "Tutorial hints have been reset.",
+  "btn_checkpoint": "CHECKPOINT",
+  "menu_continue": "CONTINUE"
 }

@@ -5,8 +5,8 @@
   "collider": {
     "w": 12,
     "h": 26,
-    "offset_x": 0,
-    "offset_y": 5
+    "offset_x": 18,
+    "offset_y": 21
   },
   "frames": {
     "idle_0": {
