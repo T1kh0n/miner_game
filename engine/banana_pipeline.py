@@ -128,6 +128,17 @@ def process_cat_miner(
         (1013, 588, 1167, 768),
         (1201, 588, 1356, 768),
     ]
+    jump_boxes = [
+        (802, 385, 983, 554),
+        (997, 382, 1131, 555),
+    ]
+    fall_boxes = [
+        (906, 196, 1039, 364),
+        (1051, 196, 1182, 362),
+    ]
+    land_boxes = [
+        (554, 7, 676, 189),
+    ]
 
     frames_dict: dict[str, Image.Image] = {}
 
@@ -155,38 +166,51 @@ def process_cat_miner(
             y_shift=(-1 if i % 2 == 1 else 0),
         )
 
-    frames_dict["jump_0"] = normalize_frame(
-        chroma_key(raw.crop(idle_boxes[0])),
-        CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=0.96, scale_y=1.06,
-        y_shift=-2,
-    )
-    frames_dict["jump_1"] = normalize_frame(
-        chroma_key(raw.crop(idle_boxes[1])),
-        CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=0.98, scale_y=1.04,
-        y_shift=-1,
-    )
+    for i, box in enumerate(jump_boxes):
+        base_jump = normalize_frame(
+            chroma_key(raw.crop(box)),
+            CAT_FRAME_W, CAT_FRAME_H,
+            y_shift=(-2 if i == 0 else -1),
+        )
+        arr_j = np.array(base_jump)
+        arr_j[3:6, 12:15, :3] = [180, 100, 45]
+        arr_j[3:6, 12:15, 3] = 255
+        arr_j[3:6, 21:24, :3] = [180, 100, 45]
+        arr_j[3:6, 21:24, 3] = 255
+        arr_j[14:18, 22:26, :3] = [215, 170, 110]
+        arr_j[14:18, 22:26, 3] = 255
+        frames_dict[f"jump_{i}"] = Image.fromarray(arr_j)
 
-    frames_dict["fall_0"] = normalize_frame(
-        chroma_key(raw.crop(idle_boxes[2])),
+    for i, box in enumerate(fall_boxes):
+        base_fall = normalize_frame(
+            chroma_key(raw.crop(box)),
+            CAT_FRAME_W, CAT_FRAME_H,
+            y_shift=(0 if i == 0 else 1),
+        )
+        arr_f = np.array(base_fall)
+        arr_f[4:7, 10:13, :3] = [180, 100, 45]
+        arr_f[4:7, 10:13, 3] = 255
+        arr_f[26:30, 8:12, :3] = [215, 170, 110]
+        arr_f[26:30, 8:12, 3] = 255
+        frames_dict[f"fall_{i}"] = Image.fromarray(arr_f)
+
+    base_land = normalize_frame(
+        chroma_key(raw.crop(land_boxes[0])),
         CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=1.02, scale_y=0.98,
-        y_shift=0,
-    )
-    frames_dict["fall_1"] = normalize_frame(
-        chroma_key(raw.crop(idle_boxes[3])),
-        CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=1.04, scale_y=0.96,
         y_shift=1,
     )
-
-    frames_dict["land_0"] = normalize_frame(
-        chroma_key(raw.crop(idle_boxes[0])),
-        CAT_FRAME_W, CAT_FRAME_H,
-        scale_x=1.08, scale_y=0.92,
-        y_shift=1,
-    )
+    arr_l = np.array(base_land)
+    arr_l[6:8, 12:15, :3] = [180, 100, 45]
+    arr_l[6:8, 21:24, :3] = [180, 100, 45]
+    arr_l[31:34, 10:14, :3] = [215, 170, 110]
+    arr_l[31:34, 10:14, 3] = 255
+    arr_l[31:34, 22:26, :3] = [215, 170, 110]
+    arr_l[31:34, 22:26, 3] = 255
+    arr_l[33, 8:10, :3] = [220, 220, 225]
+    arr_l[33, 8:10, 3] = 255
+    arr_l[33, 26:28, :3] = [220, 220, 225]
+    arr_l[33, 26:28, 3] = 255
+    frames_dict["land_0"] = Image.fromarray(arr_l)
 
     for i, box in enumerate(action_boxes):
         frames_dict[f"action_{i}"] = normalize_frame(

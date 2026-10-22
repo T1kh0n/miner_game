@@ -166,3 +166,34 @@ def test_player_controller_selects_all_mandatory_animation_frames():
     assert player._get_current_frame_key() == "afk_4"
     player.afk_timer = player._afk_blind_seconds + 0.5
     assert player._get_current_frame_key() == "afk_5"
+
+def test_jump_fall_land_distinct_feline_poses():
+    import json
+    import numpy as np
+    from PIL import Image
+
+    with open("assets/data/cat_miner.json", "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    sheet = Image.open("assets/spritesheets/cat_miner.png")
+
+    def get_crop(key: str) -> np.ndarray:
+        m = meta["frames"][key]
+        return np.array(sheet.crop((m["x"], m["y"], m["x"] + m["w"], m["y"] + m["h"])))
+
+    jump_0 = get_crop("jump_0")
+    jump_1 = get_crop("jump_1")
+    fall_0 = get_crop("fall_0")
+    fall_1 = get_crop("fall_1")
+    land_0 = get_crop("land_0")
+    idle_0 = get_crop("idle_0")
+
+    assert not np.array_equal(jump_0, idle_0)
+    assert not np.array_equal(jump_1, idle_0)
+    assert not np.array_equal(fall_0, idle_0)
+    assert not np.array_equal(fall_1, idle_0)
+    assert not np.array_equal(land_0, idle_0)
+
+    assert not np.array_equal(jump_0, jump_1)
+    assert not np.array_equal(fall_0, fall_1)
+    assert not np.array_equal(jump_0, land_0)
+
