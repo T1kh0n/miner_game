@@ -45,15 +45,20 @@ Every playable/interactive cat character spritesheet (`assets/spritesheets/cat_{
 ├── generate_models.py          # Wavefront OBJ generation in assets/models/.
 ├── pyproject.toml              # Dependencies and pytest configuration.
 ├── core/                       # Core engine subsystems
-│   ├── config.py               # Constants, palettes, physics timesteps, jump metrics.
+│   ├── audio.py                # Procedural NumPy audio synthesizer and sound manager.
 │   ├── camera.py               # Sub-pixel damped camera with screen shake.
+│   ├── config.py               # Constants, palettes, physics timesteps, jump metrics.
+│   ├── cutscene.py             # CutsceneManager and timeline actions (MoveCameraTo, ShowDialogue, etc.).
+│   ├── events.py               # Decoupled publisher-subscriber EventBus / EventManager.
 │   ├── leaderboard.py          # High-score persistence.
 │   ├── localization.py         # Singleton LocalizationManager with dynamic language switching.
 │   └── save_system.py          # Unity-compatible DTO schemas & cross-platform SaveManager.
 ├── engine/                     # Game engine systems and mechanics
 │   ├── asset_generator.py      # Procedural texture generator for spritesheets and icons.
 │   ├── asset_manager.py        # Sprite loading, texture slicing, and mask caching.
-│   ├── entities.py             # Player (invariant torso collider), RockEntity, CabinEntity, ParticlePool.
+│   ├── banana_pipeline.py      # Master image slicing, Chroma Key, and texture packing pipeline.
+│   ├── dialogue.py             # DialogueBox with typewriter stream and EmoteBubble manager.
+│   ├── entities.py             # Player, DriverCatEntity, SoldierCatEntity, FeralCatEntity, RockEntity.
 │   ├── level.py                # Procedural cave generator with BFS solver guaranteed passability.
 │   └── ui.py                   # Responsive UI framework with relative bounds and auto-font scaling.
 ├── states/                     # Finite State Machine states
@@ -69,6 +74,15 @@ Every playable/interactive cat character spritesheet (`assets/spritesheets/cat_{
 │   ├── models/                 # Generated 3D OBJ models.
 │   └── saves/                  # Fallback local directory for saves and leaderboards.
 └── tests/                      # Automated headless unit and integration test suite
+    ├── test_afk_flashlight.py
+    ├── test_audio_synthesis.py
+    ├── test_cat_miner_sprites.py
+    ├── test_character_remaster.py
+    ├── test_cutscene_dialogue.py
+    ├── test_driver_and_shale.py
+    ├── test_events.py
+    ├── test_feral_encounter.py
+    ├── test_gameplay_improvements.py
     ├── test_issue1_motion_smoothing.py
     ├── test_issue2_pickaxe_isolation.py
     ├── test_issue3_performance_culling.py
@@ -76,7 +90,10 @@ Every playable/interactive cat character spritesheet (`assets/spritesheets/cat_{
     ├── test_issue5_cabin_checkpoint.py
     ├── test_issue6_map_passability.py
     ├── test_issue7_localization.py
-    └── test_issue8_hints_dispatcher.py
+    ├── test_issue8_hints_dispatcher.py
+    ├── test_rope_physics.py
+    ├── test_soldier_and_barricade.py
+    └── test_visual_pipeline.py
 ```
 
 ---
@@ -182,3 +199,13 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy pytest tests/
 - `test_issue6_map_passability.py`: Reachability solver, bypass corridor carving, and multi-seed traversal validation.
 - `test_issue7_localization.py`: Key lookups, fallback behavior, Cyrillic font metrics, and dynamic subscriber switching.
 - `test_issue8_hints_dispatcher.py`: One-time hint dispatching, seen hint isolation across saves, and UI reset functionality.
+
+---
+
+## 11. NPC Encounters, Cutscenes & Dialogue Engine
+
+- **CutsceneManager**: Data-driven sequencer executing timeline actions (`MoveCameraTo`, `MoveEntityTo`, `PlayAnimation`, `ShowEmote`, `ShowDialogue`, `Wait`, `TriggerEvent`). Supports graceful skipping via `Space` / `Esc`.
+- **DialogueBox & Typewriter FX**: Localized dialogue presentation featuring animated text typewriter, procedural "meow-talk" voice chirps, speaker nameplate, and animated `EmoteBubble` indicators (`!`, `?`, `...`, `heart`, `rope`, `pickaxe`).
+- **Train Driver Cat (Stage 2)**: Stops incoming subway train car at the Metro platform upon arrival, rewards the player with additional grappling rope coils (+3 ropes), and acts as a safe narrative anchor.
+- **Watermelon Armor Soldier Cat (Stage 3)**: Guarding the fortified barricade clearing, equipped with watermelon rind helmet and cuirass, wielding a steel trench shovel with defensive bash and patrol states.
+- **Feral Cat Ambush & Combat (Stage 4)**: Hostile white cat with heterochromia (red left eye, blue right eye) ambushing the soldier. Can be stunned with the directional headlamp beam or defeated with teamwork, dropping a victory gem (+100 score) and unlocking deep tunnel blast doors.

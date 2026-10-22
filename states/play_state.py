@@ -6,7 +6,7 @@ from typing import Any, Callable
 from core.config import (
     CANVAS_W, CANVAS_H, PANEL_HEIGHT, TILE_SIZE, GRID_W, GRID_H,
     COLOR_TEXT, COLOR_GOLD, COLOR_DANGER, COLOR_SUCCESS, PAL_OUTLINE,
-    WALL, DIRT, ROCK, COIN, EMPTY, STONE, FIXED_DT, MAX_ACCUMULATOR,
+    WALL, DIRT, ROCK, COIN, EMPTY, STONE, SHALE, SHALE_MAX_HITS, FIXED_DT, MAX_ACCUMULATOR,
     FLASHLIGHT_ANGLE, FLASHLIGHT_SELF_GLOW, AFK_KNOCK_SECONDS, AFK_BLIND_SECONDS,
     CAT_MINER_ID,
 )
@@ -18,7 +18,15 @@ from core.events import (
 )
 from core.audio import AudioManager
 from engine.level import Level
-from engine.entities import Player, RockEntity, Particle, ParticlePool, CabinEntity, HookEntity
+from engine.entities import (
+    Player, RockEntity, Particle, ParticlePool, CabinEntity, HookEntity,
+    DriverCatEntity, SoldierCatEntity, FeralCatEntity
+)
+from core.cutscene import (
+    CutsceneManager, MoveCameraTo, MoveEntityTo, Wait,
+    ShowDialogue, TriggerEvent, ShowEmote, PlayAnimation
+)
+from engine.dialogue import DialogueBox, EmoteManager
 from engine.asset_manager import AssetManager
 from engine.ui import UIButton, UILabel, UIPanel, UINode
 from core.camera import Camera
@@ -137,6 +145,22 @@ class PlayState(State):
 
         self._events = EventManager.get()
         self._audio = AudioManager.get()
+
+        self.cutscene_mgr = CutsceneManager()
+        self.dialogue_box = DialogueBox()
+        self.emote_mgr = EmoteManager()
+        self.block_hits: dict[tuple[int, int], int] = {}
+        self.metro_cutscene_triggered: bool = False
+        self.train_x: float = -200.0
+        self.driver_cat = DriverCatEntity(2.0 * TILE_SIZE + 40.0, 9.0 * TILE_SIZE)
+        self.soldier_cutscene_triggered: bool = False
+        self.soldier_cat = SoldierCatEntity(15.0 * TILE_SIZE, 24.0 * TILE_SIZE, 12.0 * TILE_SIZE, 20.0 * TILE_SIZE)
+        self.feral_cutscene_triggered: bool = False
+        self.feral_cat = FeralCatEntity(22.0 * TILE_SIZE, 28.0 * TILE_SIZE)
+        self.blast_door_opened: bool = False
+        self.feral_defeated: bool = False
+        self.victory_gem_pos: tuple[float, float] | None = None
+        self.victory_gem_collected: bool = False
 
         self._setup_end_panels()
         self.loc.subscribe(self._refresh_strings)
@@ -371,12 +395,36 @@ class PlayState(State):
         self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=shared_data)
         self.space.on_collision(3, 1, post_solve=post_solve_wall, data=shared_data)
 
+        self.block_hits.clear()
+        self.metro_cutscene_triggered = False
+        self.train_x = -200.0
+        self.driver_cat = DriverCatEntity(2.0 * TILE_SIZE + 40.0, 9.0 * TILE_SIZE)
+        self.soldier_cutscene_triggered = False
+        self.soldier_cat = SoldierCatEntity(15.0 * TILE_SIZE, 24.0 * TILE_SIZE, 12.0 * TILE_SIZE, 20.0 * TILE_SIZE)
+        self.feral_cutscene_triggered = False
+        self.feral_cat = FeralCatEntity(22.0 * TILE_SIZE, 28.0 * TILE_SIZE)
+        self.blast_door_opened = False
+        self.feral_defeated = False
+        self.victory_gem_pos = None
+        self.victory_gem_collected = False
+        self.cutscene_mgr = CutsceneManager()
+        self.dialogue_box = DialogueBox()
+        self.emote_mgr = EmoteManager()
+
         if getattr(self.manager, "load_saved_checkpoint", False):
             setattr(self.manager, "load_saved_checkpoint", False)
             existing_slot = self.save_manager.load_slot(self.active_slot_index)
             if existing_slot is not None and existing_slot.progression.checkpoint_id:
                 self.last_checkpoint_snapshot = existing_slot
                 self.respawn_at_checkpoint()
+
+    def _on_feral_defeated(self) -> None:
+        """Handle victory state when feral cat is defeated."""
+        self.feral_defeated = True
+        self.blast_door_opened = True
+        self.victory_gem_pos = (self.feral_cat.x, self.feral_cat.y)
+        if self.soldier_cat is not None:
+            self.soldier_cat.set_state(SoldierCatEntity.STATE_COMBAT_DEFEND)
 
     def add_static_tile(self, tx: int, ty: int) -> None:
         """Register a static physics tile shape for the tile at (tx, ty)."""
@@ -414,7 +462,8 @@ class PlayState(State):
     def _dig_tile(self, dig_x: int, dig_y: int) -> bool:
         """Attempt to dig the tile at grid coordinates (dig_x, dig_y)."""
         if 0 <= dig_x < GRID_W and 0 <= dig_y < GRID_H:
-            if self.level.grid[dig_y][dig_x] == DIRT:
+            tile = self.level.grid[dig_y][dig_x]
+            if tile == DIRT:
                 self.level.grid[dig_y][dig_x] = EMPTY
                 self.mined_tile_coords.append((dig_x, dig_y))
                 self.player.dig_time = self.player.dig_duration
@@ -441,6 +490,40 @@ class PlayState(State):
                 self._audio.play("pickaxe_clink")
                 self.tutorial.fire("mine_dirt", "Dirt cleared! Watch for falling rocks above.")
                 return True
+            elif tile == SHALE:
+                hits = self.block_hits.get((dig_x, dig_y), 0) + 1
+                self.player.dig_time = self.player.dig_duration
+                self.player.dig_timer = int(self.player.dig_duration * 60)
+                self.camera.add_shake(1.0, 4)
+                self.emit_particles(
+                    dig_x * TILE_SIZE + TILE_SIZE // 2,
+                    dig_y * TILE_SIZE + TILE_SIZE // 2,
+                    [(120, 125, 135), (90, 95, 105)], 8
+                )
+                if hits < SHALE_MAX_HITS:
+                    self.block_hits[(dig_x, dig_y)] = hits
+                    self._audio.play_shale_crunch()
+                    self._events.emit(EVT_BLOCK_HIT, x=dig_x, y=dig_y)
+                    return True
+                else:
+                    self.block_hits.pop((dig_x, dig_y), None)
+                    self.level.grid[dig_y][dig_x] = EMPTY
+                    self.mined_tile_coords.append((dig_x, dig_y))
+                    if (dig_x, dig_y) in self.tile_shapes:
+                        self.space.remove(self.tile_shapes[(dig_x, dig_y)])
+                        del self.tile_shapes[(dig_x, dig_y)]
+                    for rock in self.rocks:
+                        rx = rock.body.position.x
+                        ry = rock.body.position.y
+                        tile_cx = dig_x * TILE_SIZE + TILE_SIZE / 2.0
+                        if abs(rx - tile_cx) < TILE_SIZE * 1.8:
+                            if (dig_y - 3) * TILE_SIZE <= ry <= (dig_y + 1) * TILE_SIZE:
+                                rock.body.activate()
+                                if abs(rx - tile_cx) < TILE_SIZE * 0.8 and ry < dig_y * TILE_SIZE:
+                                    rock.body.apply_impulse_at_local_point((0.0, 30.0), (0.0, 0.0))
+                    self._events.emit(EVT_BLOCK_BREAK, x=dig_x, y=dig_y)
+                    self._audio.play_shale_crunch()
+                    return True
         return False
 
     def save_checkpoint(self, cabin: CabinEntity) -> None:
@@ -529,6 +612,19 @@ class PlayState(State):
         self.root.update(mouse_pos, clicked)
 
         if event.type == pygame.KEYDOWN and not self.game_over and not self.game_won:
+            if self.cutscene_mgr.is_active:
+                if event.key in (pygame.K_SPACE, pygame.K_ESCAPE):
+                    self.cutscene_mgr.skip()
+                    return
+                if event.key in (pygame.K_e, pygame.K_RETURN, pygame.K_KP_ENTER):
+                    if self.dialogue_box.is_open:
+                        self.dialogue_box.advance()
+                    return
+            elif self.dialogue_box.is_open:
+                if event.key in (pygame.K_e, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                    self.dialogue_box.advance()
+                    return
+
             if event.key == pygame.K_ESCAPE:
                 self.paused = not self.paused
                 self.panel_pause.visible = self.paused
@@ -685,6 +781,83 @@ class PlayState(State):
         self.tutorial.update()
         self.particle_pool.update()
 
+        if self.cutscene_mgr.is_active:
+            self.cutscene_mgr.update(dt)
+        if self.dialogue_box.is_open:
+            self.dialogue_box.update(dt)
+        self.emote_mgr.update(dt)
+
+        if self.driver_cat is not None:
+            self.driver_cat.update(dt)
+        if self.soldier_cat is not None:
+            self.soldier_cat.update(dt)
+        if self.feral_cat is not None:
+            self.feral_cat.update(dt, self.player.body.position.x, self.player.body.position.y)
+
+        if not self.metro_cutscene_triggered and self.player.body.position.y >= 7.5 * TILE_SIZE:
+            self.metro_cutscene_triggered = True
+            def _on_metro_done() -> None:
+                self.train_x = float(2 * TILE_SIZE)
+                self.driver_cat.visible = True
+                self.driver_cat.has_spoken = True
+                self.player.ropes = 6
+                self._audio.play("train_brake")
+            actions = [
+                Wait(0.2),
+                ShowDialogue("driver", "Train Driver", "driver_greeting", "Greetings, traveler of the underground!", portrait_key="cat_driver"),
+            ]
+            ctx = {
+                "camera": self.camera,
+                "entities": {"player": self.player, "driver": self.driver_cat},
+                "dialogue_box": self.dialogue_box,
+                "emote_manager": self.emote_mgr,
+                "event_bus": self._events,
+            }
+            self.cutscene_mgr.start_cutscene(actions, ctx, on_complete=_on_metro_done)
+
+        if not self.soldier_cutscene_triggered and self.soldier_cat is not None:
+            if math.hypot(self.player.body.position.x - self.soldier_cat.x, self.player.body.position.y - self.soldier_cat.y) < 45.0:
+                self.soldier_cutscene_triggered = True
+                def _on_soldier_done() -> None:
+                    if self.soldier_cat is not None:
+                        self.soldier_cat.set_state(SoldierCatEntity.STATE_PATROL)
+                actions = [
+                    Wait(0.2),
+                    ShowDialogue("soldier", "Watermelon Soldier", "soldier_warning", "Halt! Beyond this barricade lies the feral cat domain!", portrait_key="cat_soldier"),
+                ]
+                ctx = {
+                    "camera": self.camera,
+                    "entities": {"player": self.player, "soldier": self.soldier_cat},
+                    "dialogue_box": self.dialogue_box,
+                    "emote_manager": self.emote_mgr,
+                    "event_bus": self._events,
+                }
+                self.cutscene_mgr.start_cutscene(actions, ctx, on_complete=_on_soldier_done)
+
+        if not self.feral_cutscene_triggered and self.feral_cat is not None:
+            if math.hypot(self.player.body.position.x - (self.feral_cat.x - 30.0), self.player.body.position.y - self.feral_cat.y) < 45.0:
+                self.feral_cutscene_triggered = True
+                if self.soldier_cat is not None:
+                    self.soldier_cat.set_state(SoldierCatEntity.STATE_PINNED_DOWN)
+                actions = [
+                    Wait(0.2),
+                    ShowDialogue("feral", "Feral Cat", "feral_screech", "Hsss! My feral territory!", portrait_key="cat_feral"),
+                ]
+                ctx = {
+                    "camera": self.camera,
+                    "entities": {"player": self.player, "feral": self.feral_cat, "soldier": self.soldier_cat},
+                    "dialogue_box": self.dialogue_box,
+                    "emote_manager": self.emote_mgr,
+                    "event_bus": self._events,
+                }
+                self.cutscene_mgr.start_cutscene(actions, ctx)
+
+        if self.victory_gem_pos is not None and not self.victory_gem_collected:
+            if math.hypot(self.player.body.position.x - self.victory_gem_pos[0], self.player.body.position.y - self.victory_gem_pos[1]) < 30.0:
+                self.victory_gem_collected = True
+                self.score += 100
+                self._audio.play("ui_click")
+
         for rip in self._afk_ripples[:]:
             rip["r"] += 1.2
             rip["alpha"] = max(0, rip["alpha"] - 8)
@@ -839,12 +1012,28 @@ class PlayState(State):
             dummy = HookEntity(interp_px, interp_py, aim_angle, self.space, self.player.body)
             dummy.render_preview(self.play_view, cam_x, cam_y, interp_px, interp_py, aim_angle)
 
+        if self.driver_cat is not None and self.driver_cat.visible:
+            self.driver_cat.render(self.play_view, cam_x, cam_y, am)
+        if self.soldier_cat is not None:
+            self.soldier_cat.render(self.play_view, cam_x, cam_y, am)
+        if self.feral_cat is not None and not self.feral_defeated:
+            self.feral_cat.render(self.play_view, cam_x, cam_y, am)
+        if self.victory_gem_pos is not None and not self.victory_gem_collected:
+            gx = int(self.victory_gem_pos[0] - cam_x)
+            gy = int(self.victory_gem_pos[1] - cam_y)
+            pygame.draw.polygon(self.play_view, (60, 240, 220), [(gx, gy - 6), (gx + 5, gy), (gx, gy + 6), (gx - 5, gy)])
+            pygame.draw.polygon(self.play_view, (220, 255, 255), [(gx, gy - 3), (gx + 2, gy), (gx, gy + 3), (gx - 2, gy)])
+
+        self.emote_mgr.render(self.play_view, cam_x, cam_y)
+
         self.player.render(self.play_view, cam_x, cam_y, am, self.render_alpha)
 
         self._render_darkness_layer(cam_x, cam_y, interp_px, interp_py, depth_ratio, start_row, end_row, start_col, end_col)
 
         surface.blit(self.play_view, (0, 0))
         self._render_diegetic_hud(surface)
+        if self.dialogue_box.is_open:
+            self.dialogue_box.render(surface)
 
         if self._afk_ripples:
             px_s = int(interp_px - cam_x)
@@ -905,7 +1094,8 @@ class PlayState(State):
 
         try:
             train_img = am.get_sprite("metro_props", "train_car")
-            train_x = int(2 * TILE_SIZE - cam_x)
+            tx = getattr(self, "train_x", float(2 * TILE_SIZE))
+            train_x = int(tx - cam_x)
             train_y = int(10 * TILE_SIZE - train_img.get_height() - cam_y)
             if -train_img.get_width() <= train_x <= CANVAS_W:
                 self.play_view.blit(train_img, (train_x, train_y))

@@ -413,6 +413,7 @@ class Player:
         self.prev_vy = 0.0
 
         self.using_rope = False
+        self.ropes = 3
         self.hook: HookEntity | None = None
         self.rope_angle = 0.0
 
@@ -727,3 +728,181 @@ class Player:
 
         if self.hook is not None:
             self.hook.render(surface, cam_x, cam_y, ix, iy)
+
+
+class DriverCatEntity:
+    """Interactive NPC Train Driver Cat present at the metro station platform."""
+
+    def __init__(self, x: float, y: float) -> None:
+        """Initialise Train Driver Cat coordinates and dialogue state."""
+        self.x: float = x
+        self.y: float = y
+        self.visible: bool = False
+        self.has_spoken: bool = False
+        self.facing_right: bool = True
+        self.anim_state: str = "idle"
+        self.anim_time: float = 0.0
+
+    def update(self, dt: float) -> None:
+        """Advance animation timer."""
+        self.anim_time += dt
+
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager) -> None:
+        """Draw the Train Driver Cat sprite if currently visible."""
+        if not self.visible:
+            return
+        frame_idx = int(self.anim_time * 6.0) % 4
+        key = f"{self.anim_state}_{frame_idx}"
+        sprite = asset_mgr.get_sprite("cat_driver", key)
+        if not self.facing_right:
+            sprite = pygame.transform.flip(sprite, True, False)
+        rx = int(self.x - cam_x) - sprite.get_width() // 2
+        ry = int(self.y - cam_y) - int(sprite.get_height() * 0.75)
+        surface.blit(sprite, (rx, ry))
+
+
+class SoldierCatEntity:
+    """Guarding ally cat in watermelon armor defending the lower barricade post."""
+
+    STATE_GUARD_POST = "guard_post"
+    STATE_PATROL = "patrol"
+    STATE_DIALOGUE = "dialogue"
+    STATE_COMBAT_DEFEND = "combat_defend"
+    STATE_PINNED_DOWN = "pinned_down"
+    STATE_ALLY_FOLLOW = "ally_follow"
+
+    def __init__(self, x: float, y: float, min_x: float, max_x: float) -> None:
+        """Initialise Soldier Cat coordinates, patrol bounds, and default state."""
+        self.x: float = x
+        self.y: float = y
+        self.min_x: float = min_x
+        self.max_x: float = max_x
+        self.state: str = self.STATE_GUARD_POST
+        self.anim_state: str = "idle"
+        self.facing_right: bool = True
+        self.speed: float = 35.0
+        self.anim_time: float = 0.0
+
+    def set_state(self, new_state: str) -> None:
+        """Transition Soldier Cat FSM state and synchronise animation name."""
+        self.state = new_state
+        if new_state == self.STATE_GUARD_POST:
+            self.anim_state = "idle"
+        elif new_state == self.STATE_PATROL:
+            self.anim_state = "walk"
+        elif new_state == self.STATE_DIALOGUE:
+            self.anim_state = "talk"
+        elif new_state == self.STATE_COMBAT_DEFEND:
+            self.anim_state = "action_shovel"
+        elif new_state == self.STATE_PINNED_DOWN:
+            self.anim_state = "pinned"
+        elif new_state == self.STATE_ALLY_FOLLOW:
+            self.anim_state = "walk"
+
+    def update(self, dt: float) -> None:
+        """Advance patrol movement and animation progression."""
+        self.anim_time += dt
+        if self.state == self.STATE_PATROL:
+            if self.facing_right:
+                self.x += self.speed * dt
+                if self.x >= self.max_x:
+                    self.x = self.max_x
+                    self.facing_right = False
+            else:
+                self.x -= self.speed * dt
+                if self.x <= self.min_x:
+                    self.x = self.min_x
+                    self.facing_right = True
+
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager) -> None:
+        """Render Soldier Cat sprite with directional facing."""
+        frame_idx = int(self.anim_time * 6.0) % 4
+        key = f"{self.anim_state}_{frame_idx}"
+        sprite = asset_mgr.get_sprite("cat_soldier", key)
+        if not self.facing_right:
+            sprite = pygame.transform.flip(sprite, True, False)
+        rx = int(self.x - cam_x) - sprite.get_width() // 2
+        ry = int(self.y - cam_y) - int(sprite.get_height() * 0.75)
+        surface.blit(sprite, (rx, ry))
+
+
+class FeralCatEntity:
+    """Hostile agile mutated feline stalking the deep tunnels below the barricade."""
+
+    STATE_STALK = "stalk"
+    STATE_STUNNED = "stunned"
+    STATE_HURT = "hurt"
+    STATE_DEFEATED = "defeated"
+
+    def __init__(self, x: float, y: float) -> None:
+        """Initialise Feral Cat stats, health, and encounter flags."""
+        self.x: float = x
+        self.y: float = y
+        self.hp: int = 3
+        self.state: str = self.STATE_STALK
+        self.anim_state: str = "idle"
+        self.facing_right: bool = False
+        self.stun_timer: float = 0.0
+        self.invulnerable_timer: float = 0.0
+        self.is_defeated: bool = False
+        self.light_exposure_time: float = 0.0
+        self.anim_time: float = 0.0
+
+    def update(
+        self,
+        dt: float,
+        target_x: float = 0.0,
+        target_y: float = 0.0,
+        is_illuminated: bool = False
+    ) -> None:
+        """Advance Feral Cat AI timers, flashlight stun tracking, and hurt recovery."""
+        self.anim_time += dt
+        if self.invulnerable_timer > 0.0:
+            self.invulnerable_timer = max(0.0, self.invulnerable_timer - dt)
+
+        if is_illuminated and not self.is_defeated:
+            self.light_exposure_time += dt
+            if self.light_exposure_time >= 0.25:
+                self.state = self.STATE_STUNNED
+                self.stun_timer = 1.5
+                self.anim_state = "hurt"
+        else:
+            self.light_exposure_time = max(0.0, self.light_exposure_time - dt)
+
+        if self.stun_timer > 0.0:
+            self.stun_timer = max(0.0, self.stun_timer - dt)
+            if self.stun_timer <= 0.0 and not self.is_defeated:
+                self.state = self.STATE_STALK
+                self.anim_state = "idle"
+        elif self.state == self.STATE_HURT and not self.is_defeated:
+            if self.invulnerable_timer <= 0.0:
+                self.state = self.STATE_STALK
+                self.anim_state = "idle"
+
+    def take_damage(self, amount: int, knockback_dir: float = 1.0) -> bool:
+        """Apply damage to Feral Cat. Return True if defeated."""
+        if self.invulnerable_timer > 0.0 or self.is_defeated:
+            return self.is_defeated
+        self.hp = max(0, self.hp - amount)
+        self.invulnerable_timer = 0.4
+        self.x += knockback_dir * 12.0
+        if self.hp <= 0:
+            self.is_defeated = True
+            self.state = self.STATE_DEFEATED
+            self.anim_state = "hurt"
+            return True
+        self.state = self.STATE_HURT
+        self.anim_state = "hurt"
+        return False
+
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager) -> None:
+        """Draw the Feral Cat sprite with current combat state animation."""
+        frame_idx = int(self.anim_time * 8.0) % 4
+        key = f"{self.anim_state}_{frame_idx}"
+        sprite = asset_mgr.get_sprite("cat_feral", key)
+        if not self.facing_right:
+            sprite = pygame.transform.flip(sprite, True, False)
+        rx = int(self.x - cam_x) - sprite.get_width() // 2
+        ry = int(self.y - cam_y) - int(sprite.get_height() * 0.75)
+        surface.blit(sprite, (rx, ry))
+

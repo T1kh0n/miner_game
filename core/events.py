@@ -38,19 +38,19 @@ class EventManager:
         return cls._instance
 
     def subscribe(self, event_name: str, callback: Callable[..., None]) -> None:
-        """Register *callback* to be called whenever *event_name* is emitted.
+        """Register callback to be called whenever event_name is emitted.
 
         Args:
             event_name: The string identifier of the event to listen for.
             callback: A callable that accepts the keyword arguments passed to
-                :meth:`emit`.
+                emit.
         """
         self._subscribers[event_name].append(callback)
 
     def unsubscribe(self, event_name: str, callback: Callable[..., None]) -> None:
-        """Remove a previously registered *callback* for *event_name*.
+        """Remove a previously registered callback for event_name.
 
-        If *callback* is not currently subscribed the call is a no-op.
+        If callback is not currently subscribed the call is a no-op.
 
         Args:
             event_name: The string identifier of the event.
@@ -62,7 +62,7 @@ class EventManager:
             pass
 
     def emit(self, event_name: str, **kwargs: Any) -> None:
-        """Invoke all callbacks subscribed to *event_name* with *kwargs*.
+        """Invoke all callbacks subscribed to event_name with kwargs.
 
         Callbacks are called in the order they were subscribed. Exceptions
         raised by individual callbacks propagate immediately.
@@ -81,3 +81,6 @@ class EventManager:
         test cases.
         """
         self._subscribers.clear()
+
+
+EventBus = EventManager

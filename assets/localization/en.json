@@ -33,5 +33,8 @@
   "hint_checkpoint": "Checkpoint saved! Progress secured.",
   "hints_reset_done": "Tutorial hints have been reset.",
   "btn_checkpoint": "CHECKPOINT",
-  "menu_continue": "CONTINUE"
+  "menu_continue": "CONTINUE",
+  "driver_greeting": "Greetings, weary miner! The upper bunker gates are sealed, but you can find deeper tunnels ahead. Take these ropes!",
+  "soldier_warning": "Halt! Mark-IV Watermelon Armor on duty! Watch your flank, feral cats infested the lower tunnels!",
+  "feral_screech": "Hsss! My feral territory! Get out!"
 }

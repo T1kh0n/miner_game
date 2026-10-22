@@ -12,7 +12,7 @@ class AssetGenerator:
     """Procedural sprite and tile generator for all game assets."""
 
     @staticmethod
-    def generate_all() -> None:
+    def generate_all(force: bool = False) -> None:
         """Generate all game assets if missing without overwriting existing files."""
         os.makedirs("assets/spritesheets", exist_ok=True)
         os.makedirs("assets/data", exist_ok=True)
