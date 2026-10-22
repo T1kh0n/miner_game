@@ -36,7 +36,7 @@ class AssetManager:
                 self.sprites[bundle_name][key] = texture.subsurface(rect).copy()
 
     def get_sprite(self, bundle, frame_key=None):
-        if bundle not in self.sprites:
+        if bundle not in self.sprites or (frame_key is not None and isinstance(self.sprites.get(bundle), dict) and frame_key not in self.sprites[bundle]):
             self.load_bundle(bundle)
         if frame_key is None:
             return self.sprites[bundle]

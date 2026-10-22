@@ -749,9 +749,10 @@ def process_metro_props(
         "rock": (380, 440, 500, 560),
         "stone": (980, 300, 1110, 420),
         "bg_brick": (1110, 40, 1240, 160),
+        "shale": (980, 300, 1110, 420),
     }
 
-    tile_order = ["wall_under", "wall_surface", "dirt", "rock", "stone", "bg_brick"]
+    tile_order = ["wall_under", "wall_surface", "dirt", "rock", "stone", "bg_brick", "shale"]
     tiles_sheet = Image.new("RGBA", (TILE_SIZE * len(tile_order), TILE_SIZE), (0, 0, 0, 0))
     tiles_frames_meta = {}
 
@@ -762,6 +763,16 @@ def process_metro_props(
         if name == "bg_brick":
             arr = np.array(c_tile)
             arr[:, :, :3] = (arr[:, :, :3].astype(float) * 0.45).astype(np.uint8)
+            arr[:, :, 3] = 255
+            c_tile = Image.fromarray(arr)
+        elif name == "shale":
+            arr = np.array(c_tile)
+            arr[:, :, 0] = (arr[:, :, 0].astype(float) * 0.6).astype(np.uint8)
+            arr[:, :, 1] = (arr[:, :, 1].astype(float) * 0.65).astype(np.uint8)
+            arr[:, :, 2] = (arr[:, :, 2].astype(float) * 0.75).astype(np.uint8)
+            arr[2:4, :, :3] = np.clip(arr[2:4, :, :3].astype(float) * 1.3, 0, 255).astype(np.uint8)
+            arr[8:10, :, :3] = (arr[8:10, :, :3].astype(float) * 0.7).astype(np.uint8)
+            arr[14:16, :, :3] = np.clip(arr[14:16, :, :3].astype(float) * 1.2, 0, 255).astype(np.uint8)
             arr[:, :, 3] = 255
             c_tile = Image.fromarray(arr)
         x_pos = idx * TILE_SIZE

@@ -1027,10 +1027,7 @@ class PlayState(State):
                     elif cell == STONE:
                         self.play_view.blit(am.get_sprite("tiles", "stone"), (rx, ry))
                     elif cell == SHALE:
-                        try:
-                            self.play_view.blit(am.get_sprite("tiles", "shale"), (rx, ry))
-                        except Exception:
-                            self.play_view.blit(am.get_sprite("tiles", "stone"), (rx, ry))
+                        self.play_view.blit(am.get_sprite("tiles", "shale"), (rx, ry))
                     elif cell == COIN:
                         self.play_view.blit(coin_frame, (rx, ry))
 

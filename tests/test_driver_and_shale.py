@@ -114,3 +114,26 @@ def test_level_generates_shale_and_playstate_creates_collision():
 
     for sx, sy in shale_tiles_in_level[:5]:
         assert (sx, sy) in ps.tile_shapes
+
+
+def test_shale_tile_visual_texture_and_rendering():
+    from engine.asset_manager import AssetManager
+
+    with open("assets/data/tiles.json", "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert "shale" in meta["frames"]
+    assert meta["frames"]["shale"]["w"] == TILE_SIZE
+    assert meta["frames"]["shale"]["h"] == TILE_SIZE
+
+    am = AssetManager.get()
+    shale_sprite = am.get_sprite("tiles", "shale")
+    assert isinstance(shale_sprite, pygame.Surface)
+    assert shale_sprite.get_width() == TILE_SIZE
+    assert shale_sprite.get_height() == TILE_SIZE
+
+    sm = StateMachine()
+    ps = PlayState(sm)
+    ps.enter()
+    ps.level.grid[1][1] = SHALE
+    render_surf = pygame.Surface((320, 240))
+    ps.render(render_surf)

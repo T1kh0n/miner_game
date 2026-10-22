@@ -240,6 +240,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: `SHALE` has no visual texture in `tiles.png`, no entry in `tiles.json`, no generation procedure in `AssetGenerator`, and no render block in `PlayState.render()` (lines 975–985 only handle `WALL`, `DIRT`, `STONE`, and `COIN`). In addition, `PlayState.enter()` does not register static physics bodies for `SHALE` tiles.
 - **Severity**: Medium
 - **Location**: `engine/asset_generator.py`, `assets/spritesheets/tiles.png`, `states/play_state.py` (lines 335–340, 975–985).
+- **Status**: Resolved
 
 #### Issue 1.4: Deep Tunnel Blast Door Entity Completely Missing
 - **Expected**: README Section 11 states defeating the Feral Cat unlocks "deep tunnel blast doors".

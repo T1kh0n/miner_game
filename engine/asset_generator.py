@@ -121,10 +121,24 @@ class AssetGenerator:
         pygame.draw.line(bg_brick, PAL_OUTLINE, (0, 9), (TILE_SIZE, 9), 1)
         pygame.draw.line(bg_brick, PAL_OUTLINE, (9, 0), (9, 9), 1)
         pygame.draw.line(bg_brick, PAL_OUTLINE, (12, 9), (12, TILE_SIZE), 1)
-        sheet_wide = pygame.Surface((TILE_SIZE * 6, TILE_SIZE), pygame.SRCALPHA)
+        shale = pygame.Surface((TILE_SIZE, TILE_SIZE))
+        shale.fill((46, 50, 60))
+        pygame.draw.rect(shale, (62, 68, 80), (1, 1, TILE_SIZE - 2, TILE_SIZE - 2))
+        pygame.draw.rect(shale, (78, 86, 102), (2, 2, 16, 3))
+        pygame.draw.rect(shale, (38, 42, 52), (2, 6, 16, 2))
+        pygame.draw.rect(shale, (72, 80, 96), (2, 9, 16, 3))
+        pygame.draw.rect(shale, (36, 40, 50), (2, 13, 16, 2))
+        pygame.draw.rect(shale, (64, 72, 86), (2, 16, 16, 2))
+        pygame.draw.line(shale, (95, 105, 125), (3, 3), (14, 3), 1)
+        pygame.draw.line(shale, (95, 105, 125), (5, 10), (16, 10), 1)
+        pygame.draw.rect(shale, PAL_OUTLINE, (0, 0, TILE_SIZE, TILE_SIZE), 1)
+        pygame.draw.line(shale, PAL_OUTLINE, (0, 8), (TILE_SIZE, 8), 1)
+        pygame.draw.line(shale, PAL_OUTLINE, (0, 15), (TILE_SIZE, 15), 1)
+        sheet_wide = pygame.Surface((TILE_SIZE * 7, TILE_SIZE), pygame.SRCALPHA)
         sheet_wide.blit(sheet, (0, 0))
         sheet_wide.blit(stone, (TILE_SIZE * 4, 0))
         sheet_wide.blit(bg_brick, (TILE_SIZE * 5, 0))
+        sheet_wide.blit(shale, (TILE_SIZE * 6, 0))
         pygame.image.save(sheet_wide, "assets/spritesheets/tiles.png")
         meta = {
             "texture": "tiles.png",
@@ -136,7 +150,8 @@ class AssetGenerator:
                 "dirt": {"x": TILE_SIZE * 2, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
                 "rock": {"x": TILE_SIZE * 3, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
                 "stone": {"x": TILE_SIZE * 4, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
-                "bg_brick": {"x": TILE_SIZE * 5, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]}
+                "bg_brick": {"x": TILE_SIZE * 5, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
+                "shale": {"x": TILE_SIZE * 6, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]}
             }
         }
         with open("assets/data/tiles.json", "w", encoding="utf-8") as f:
