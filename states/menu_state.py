@@ -121,7 +121,7 @@ class MenuState(State):
 
     def enter(self) -> None:
         """Check existing save slots and update continue button status."""
-        has_save = self.save_manager.slot_exists(0)
+        has_save = self.save_manager.slot_exists(1) or self.save_manager.slot_exists(0)
         self.btn_continue.visible = has_save
         self._refresh_strings()
         AudioManager.get().initialize()

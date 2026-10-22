@@ -179,3 +179,16 @@ def test_menu_state_metro_styling_and_continue_button():
     menu.update(0.016)
     menu.render(surf)
     assert surf.get_bounding_rect().width > 0
+
+
+def test_menu_state_continue_button_slot1():
+    sm = StateMachine()
+    menu = MenuState(sm)
+    save_mgr = menu.save_manager
+    slot = SaveSlotDTO(1, PlayerStateDTO(Vector2DTO(0, 0), 100, 100, [], "miner"), WorldStateDTO(1), ProgressionDTO(checkpoint_id="cabin_1"))
+    save_mgr.save_slot(1, slot)
+    try:
+        menu.enter()
+        assert menu.btn_continue.visible is True
+    finally:
+        save_mgr.delete_slot(1)

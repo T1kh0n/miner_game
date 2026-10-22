@@ -414,6 +414,10 @@ class PlayState(State):
         if getattr(self.manager, "load_saved_checkpoint", False):
             setattr(self.manager, "load_saved_checkpoint", False)
             existing_slot = self.save_manager.load_slot(self.active_slot_index)
+            if existing_slot is None:
+                existing_slot = self.save_manager.load_slot(0)
+                if existing_slot is not None:
+                    self.active_slot_index = 0
             if existing_slot is not None and existing_slot.progression.checkpoint_id:
                 self.last_checkpoint_snapshot = existing_slot
                 self.respawn_at_checkpoint()

@@ -350,6 +350,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: `MenuState.enter()` checks `save_manager.slot_exists(0)` to determine continue button visibility (`states/menu_state.py`, line 125). However, `PlayState` exclusively saves to and loads from slot 1 (`active_slot_index = 1`). `save_slot_0.json` is never written. Consequently, the "CONTINUE" button is permanently hidden, preventing players from resuming saved expeditions.
 - **Severity**: Critical
 - **Location**: `states/menu_state.py` (line 125), `states/play_state.py` (lines 131, 560–600).
+- **Status**: Resolved
 
 #### Issue 4.3: Hardcoded Untranslated Strings and Broken Localization Lookups
 - **Expected**: Full Russian and English bilingual support across all gameplay messages, menus, and HUD readouts.
