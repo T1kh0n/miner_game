@@ -344,6 +344,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - Russian `soldier_warning`: Wraps to 4 lines (87px height), overflowing the box.
 - **Severity**: Critical
 - **Location**: `engine/dialogue.py` (lines 235–265, 305–330), `states/play_state.py` (line 1038).
+- **Status**: Resolved
 
 #### Issue 4.2: Main Menu Continue Button Permanently Hidden (Save Slot Index Conflict)
 - **Expected**: Upon launching the game, players who have previously saved at a cabin checkpoint see and can click the "CONTINUE" button on the main menu.

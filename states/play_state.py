@@ -117,6 +117,8 @@ class PlayState(State):
         self.loc = LocalizationManager.get()
         self.font = self.loc.get_font(15)
         self.font_big = self.loc.get_font(20)
+        self.font_dialogue = self.loc.get_font(9)
+        self.font_dialogue_name = self.loc.get_font(11)
         self.world_w = GRID_W * TILE_SIZE
         self.world_h = GRID_H * TILE_SIZE
 
@@ -249,6 +251,8 @@ class PlayState(State):
         self.btn_pause_hints.set_text(self.loc.get_text("btn_reset_hints", "RESET HINTS"))
         self.btn_pause_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
         self.btn_pause_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
+        self.font_dialogue = self.loc.get_font(9)
+        self.font_dialogue_name = self.loc.get_font(11)
         if hasattr(self, "player") and hasattr(self.player, "death_key") and self.player.death_key:
             self.death_label.set_text(self.loc.get_text(self.player.death_key, "CAVE-IN COLLAPSE"))
         if hasattr(self, "tutorial"):
@@ -1037,7 +1041,7 @@ class PlayState(State):
         surface.blit(self.play_view, (0, 0))
         self._render_diegetic_hud(surface)
         if self.dialogue_box.is_open:
-            self.dialogue_box.render(surface, self.font, self.font_big)
+            self.dialogue_box.render(surface, self.font_dialogue, self.font_dialogue_name)
 
         if self._afk_ripples:
             px_s = int(interp_px - cam_x)

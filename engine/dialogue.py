@@ -227,15 +227,14 @@ class DialogueBox:
             return
 
         if font is None:
-            font = LocalizationManager.get().get_font(12)
-        """Render dialogue frame, portrait box, speaker name, and typed text."""
-        if not self.is_open:
-            return
+            font = LocalizationManager.get().get_font(9)
+        if font_name is None:
+            font_name = LocalizationManager.get().get_font(11)
 
-        dw = CANVAS_W - 24
+        dw = CANVAS_W - 20
         dh = 52
-        dx = 12
-        dy = CANVAS_H - dh - 8
+        dx = 10
+        dy = CANVAS_H - dh - 4
 
         pygame.draw.rect(surface, CAT_OUTLINE, (dx - 1, dy - 1, dw + 2, dh + 2), border_radius=4)
         pygame.draw.rect(surface, (18, 16, 24), (dx, dy, dw, dh), border_radius=3)
@@ -251,22 +250,21 @@ class DialogueBox:
 
         self._render_portrait(surface, px, py, portrait_w, portrait_h)
 
-        tx = px + portrait_w + 8
-        ty = dy + 5
+        tx = px + portrait_w + 6
+        ty = dy + 3
 
-        name_font = font_name if font_name is not None else font
-        name_surf = name_font.render(self.speaker_name, True, COLOR_GOLD)
+        name_surf = font_name.render(self.speaker_name, True, COLOR_GOLD)
         surface.blit(name_surf, (tx, ty))
 
         revealed_text = self.full_text[:self.char_index]
-        max_line_w = (dx + dw - 10) - tx
-        self._render_wrapped_text(surface, revealed_text, font, tx, ty + 15, max_line_w)
+        max_line_w = (dx + dw - 8) - tx
+        self._render_wrapped_text(surface, revealed_text, font, tx, ty + 12, max_line_w)
 
         if not self.is_typing:
             blink = int(pygame.time.get_ticks() / 300) % 2 == 0
             if blink:
-                arrow_x = dx + dw - 10
-                arrow_y = dy + dh - 10
+                arrow_x = dx + dw - 8
+                arrow_y = dy + dh - 8
                 pygame.draw.polygon(surface, COLOR_GOLD, [
                     (arrow_x - 3, arrow_y - 3),
                     (arrow_x + 3, arrow_y - 3),
@@ -328,6 +326,6 @@ class DialogueBox:
             lines.append(cur_line)
 
         line_h = font.get_linesize()
-        for idx, line in enumerate(lines[:2]):
+        for idx, line in enumerate(lines):
             surf = font.render(line, True, COLOR_TEXT)
             surface.blit(surf, (x, y + idx * line_h))

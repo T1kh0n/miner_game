@@ -124,3 +124,15 @@ def test_cutscene_manager_timeline_and_skip() -> None:
     assert ent.y == 10.0
     assert len(events_received) == 1
     assert events_received[0]["arg"] == 42
+
+
+def test_dialogue_box_text_does_not_overflow():
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+    dbox = DialogueBox()
+    surf = pygame.Surface((320, 180))
+    long_text = "Greetings, weary miner! The upper bunker gates are sealed, but you can find deeper tunnels ahead. Take these ropes!"
+    dbox.show_message("driver", "Train Driver", "test_overflow", long_text)
+    dbox.fast_forward()
+    dbox.render(surf)
+    assert dbox.is_open is True
