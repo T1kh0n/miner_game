@@ -156,3 +156,22 @@ def test_blast_door_entity_and_interaction():
     ps._on_feral_defeated()
     assert ps.blast_door.is_open
     assert ps.blast_door_opened
+
+
+def test_feral_heterochromia_present_across_all_frames():
+    import json
+    import numpy as np
+    from PIL import Image
+
+    sheet = Image.open("assets/spritesheets/cat_feral.png")
+    with open("assets/data/cat_feral.json", "r", encoding="utf-8") as f:
+        meta = json.load(f)
+
+    for frame_key, fmeta in meta["frames"].items():
+        x, y, w, h = fmeta["x"], fmeta["y"], fmeta["w"], fmeta["h"]
+        crop = sheet.crop((x, y, x + w, y + h))
+        arr = np.array(crop)
+        has_red = np.any((arr[:, :, 0] > 200) & (arr[:, :, 1] < 100) & (arr[:, :, 2] < 100))
+        has_blue = np.any((arr[:, :, 2] > 200) & (arr[:, :, 0] < 100) & (arr[:, :, 1] < 160))
+        assert has_red, f"Missing red left iris in {frame_key}"
+        assert has_blue, f"Missing blue right iris in {frame_key}"

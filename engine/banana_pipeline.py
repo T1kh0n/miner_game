@@ -643,13 +643,34 @@ def process_cat_feral(
             fw, fh,
         )
 
-    # Feature enhancement for feral
-    arr_0 = np.array(frames_dict["idle_0"])
-    arr_0[10:14, 14:22, :3] = [250, 250, 250]
-    arr_0[15:18, 15:21, :3] = [215, 45, 50]
-    arr_0[9:11, 15:17, :3] = [245, 40, 50]
-    arr_0[9:11, 19:21, :3] = [45, 140, 245]
-    frames_dict["idle_0"] = Image.fromarray(arr_0)
+    for i in range(4):
+        y_off = 1 if i in (1, 2) else 0
+        arr_i = np.array(frames_dict[f"idle_{i}"])
+        arr_i[10 + y_off:14 + y_off, 14:22, :3] = [250, 250, 250]
+        arr_i[15 + y_off:18 + y_off, 15:21, :3] = [215, 45, 50]
+        frames_dict[f"idle_{i}"] = Image.fromarray(arr_i)
+
+    red_iris = [245, 40, 50]
+    blue_iris = [45, 140, 245]
+    for key, f_img in frames_dict.items():
+        arr = np.array(f_img)
+        rows = np.where(arr[:, :, 3] > 100)[0]
+        if len(rows) == 0:
+            continue
+        top_y = rows[0]
+        head_mask = arr[top_y:top_y + 10, :, 3] > 100
+        head_cols = np.where(head_mask)[1]
+        center_x = int(np.mean(head_cols)) if len(head_cols) > 0 else 18
+        ey = top_y + 5
+        lx1 = max(0, center_x - 4)
+        lx2 = min(fw, center_x - 2)
+        rx1 = max(0, center_x)
+        rx2 = min(fw, center_x + 2)
+        arr[ey:ey + 2, lx1:lx2, :3] = red_iris
+        arr[ey:ey + 2, rx1:rx2, :3] = blue_iris
+        arr[ey:ey + 2, lx1:lx2, 3] = 255
+        arr[ey:ey + 2, rx1:rx2, 3] = 255
+        frames_dict[key] = Image.fromarray(arr)
 
     ordered_keys = [
         "idle_0", "idle_1", "idle_2", "idle_3",

@@ -265,6 +265,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: In `engine/banana_pipeline.py` (lines 622–627), heterochromia pixels (`[245, 40, 50]` red left eye, `[45, 140, 245]` blue right eye) are manually patched exclusively into `idle_0`. Frames `idle_1..3`, `run_0..3`, `pounce_0..3`, `action_slash_0..3`, `talk_0..3`, and `hurt_0..3` lack heterochromia entirely. During idle playback, the eyes abruptly flicker from vivid colors to blank.
 - **Severity**: High
 - **Location**: `assets/spritesheets/cat_feral.png`, `engine/banana_pipeline.py` (lines 622–627).
+- **Status**: Resolved
 
 #### Issue 2.2: Idle Animation Frame Palette Popping and Inconsistent Overlays
 - **Expected**: Anthropomorphic cat characters feature consistent 3-tone ramp shading across all breathing frames (`idle_0..3`).
