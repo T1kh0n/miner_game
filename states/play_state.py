@@ -469,6 +469,8 @@ class PlayState(State):
 
     def _dig_tile(self, dig_x: int, dig_y: int) -> bool:
         """Attempt to dig the tile at grid coordinates (dig_x, dig_y)."""
+        if self.player.using_rope:
+            return False
         if 0 <= dig_x < GRID_W and 0 <= dig_y < GRID_H:
             tile = self.level.grid[dig_y][dig_x]
             if tile == DIRT:
@@ -753,7 +755,7 @@ class PlayState(State):
             if self.player.is_climbing:
                 self.tutorial.fire("climb_stamina", "Climbing uses stamina. Rest on ground to recover!")
 
-            if not self.player.is_dead and not self.player.is_climbing:
+            if not self.player.is_dead and not self.player.is_climbing and not self.player.using_rope:
                 px = self.player.body.position.x
                 py = self.player.body.position.y
                 hw = self.player.w / 2.0

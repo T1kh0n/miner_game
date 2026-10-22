@@ -406,6 +406,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: In `PlayState.update()` (lines 760–775), directional digging triggers whenever directional keys are held against dirt (`if up or down or left or right: ... self._dig_tile(tx, ty)`). It does not check `if not self.player.using_rope`. The player automatically mines and destroys terrain simply by moving or climbing, even while the grappling rope is equipped.
 - **Severity**: High
 - **Location**: `states/play_state.py` (lines 760–775).
+- **Status**: Resolved
 
 #### Issue 6.3: Shale Mineral Blocks Absent from Procedural Level Generation
 - **Expected**: Biome 1 cavern generates shale mineral blocks requiring multi-hit mining (`SHALE_MAX_HITS = 3`).

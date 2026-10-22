@@ -195,3 +195,42 @@ def test_player_retract_rope_removes_hook():
     player.fire_rope(space, 0.0)
     player.retract_rope()
     assert player.hook is None
+
+
+def test_rope_mode_disables_dirt_digging():
+    import pygame
+    pygame.init()
+    pygame.font.init()
+    pygame.display.set_mode((1, 1))
+    from states.state_machine import StateMachine
+    from states.play_state import PlayState
+    from core.config import DIRT, EMPTY, TILE_SIZE
+
+    sm = StateMachine()
+    ps = PlayState(sm)
+    ps.enter()
+
+    px = ps.player.body.position.x
+    py = ps.player.body.position.y
+    tx = int((px + 10) // TILE_SIZE)
+    ty = int(py // TILE_SIZE)
+    ps.level.grid[ty][tx] = DIRT
+
+    ps.player.using_rope = True
+    assert ps._dig_tile(tx, ty) is False
+    assert ps.level.grid[ty][tx] == DIRT
+
+    class KeyMock:
+        def __getitem__(self, k):
+            return k in (pygame.K_RIGHT, pygame.K_d)
+
+    orig_get_pressed = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: KeyMock()
+    try:
+        ps.update(0.05)
+        assert ps.level.grid[ty][tx] == DIRT
+        ps.player.using_rope = False
+        ps.update(0.05)
+        assert ps.level.grid[ty][tx] == EMPTY
+    finally:
+        pygame.key.get_pressed = orig_get_pressed
