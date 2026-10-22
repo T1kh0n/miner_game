@@ -109,7 +109,7 @@ Every playable/interactive cat character spritesheet (`assets/spritesheets/cat_{
 
 ## 3. Player Collider & Collision Isolation
 
-- **Torso/Legs Invariant Collider**: The player's physical Pymunk shape is locked to a constant bounding box (`PLAYER_BODY_W = 12.0`, `PLAYER_BODY_H = 18.0`) that never mutates or resets during swings or state changes.
+- **Torso/Legs Invariant Collider**: The player's physical Pymunk shape is locked to a constant bounding box (`PLAYER_BODY_W = 12.0`, `PLAYER_BODY_H = 26.0`) that never mutates or resets during swings or state changes.
 - **Pickaxe Isolation**: The pickaxe is completely excluded from solid physical collisions, preventing walls or blocks from repelling the player.
 - **Climbing Hook Raycast Query**: Climbing anchor attachment is computed via `space.segment_query()` filtering out self-hits, detecting walls within reach (`CLIMB_REACH_DIST = 16.0`) only while holding Shift.
 - **Digging Spatial Trigger**: Digging uses a momentary rectangular query (`get_dig_sensor_bounds`) only during active swing frames, fully decoupled from physical collision bodies.
@@ -254,6 +254,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: `core/config.py` sets `CAT_BODY_H = 26.0`, and `engine/entities.py` assigns `PLAYER_BODY_H = CAT_BODY_H` (26.0). The physical collider height is 44% taller than specified, impacting narrow gap traversal.
 - **Severity**: Low
 - **Location**: `core/config.py` (line 30), `engine/entities.py` (line 11).
+- **Status**: Resolved
 
 ---
 
