@@ -23,8 +23,16 @@ class AssetGenerator:
         for skin_id, palette in SKIN_PALETTES.items():
             if not (os.path.exists(f"assets/spritesheets/player_{skin_id}.png") and os.path.exists(f"assets/data/player_{skin_id}.json")):
                 AssetGenerator.generate_player_skin(skin_id, palette)
-        if not (os.path.exists(f"assets/spritesheets/cat_{CAT_MINER_ID}.png") and os.path.exists(f"assets/data/cat_{CAT_MINER_ID}.json")):
-            AssetGenerator.generate_cat_miner()
+        needed_remasters = [
+            (f"assets/spritesheets/cat_{CAT_MINER_ID}.png", f"assets/data/cat_{CAT_MINER_ID}.json"),
+            ("assets/spritesheets/cat_driver.png", "assets/data/cat_driver.json"),
+            ("assets/spritesheets/cat_soldier.png", "assets/data/cat_soldier.json"),
+            ("assets/spritesheets/cat_feral.png", "assets/data/cat_feral.json"),
+        ]
+        needs_pipeline = force or any(not (os.path.exists(p) and os.path.exists(j)) for p, j in needed_remasters)
+        if needs_pipeline:
+            from engine.banana_pipeline import run_pipeline
+            run_pipeline()
 
     @staticmethod
     def generate_tiles(force: bool = False) -> None:
@@ -97,9 +105,23 @@ class AssetGenerator:
         sheet.blit(wall_surface, (TILE_SIZE, 0))
         sheet.blit(dirt, (TILE_SIZE * 2, 0))
         sheet.blit(rock, (TILE_SIZE * 3, 0))
-        sheet_wide = pygame.Surface((TILE_SIZE * 5, TILE_SIZE), pygame.SRCALPHA)
+        bg_brick = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+        bg_brick.fill((32, 26, 36))
+        pygame.draw.rect(bg_brick, (58, 44, 52), (1, 1, 8, 8))
+        pygame.draw.rect(bg_brick, (50, 38, 46), (10, 1, 9, 8))
+        pygame.draw.rect(bg_brick, (46, 34, 42), (1, 10, 11, 8))
+        pygame.draw.rect(bg_brick, (56, 42, 50), (13, 10, 6, 8))
+        pygame.draw.rect(bg_brick, (72, 54, 64), (2, 2, 6, 2))
+        pygame.draw.rect(bg_brick, (72, 54, 64), (11, 2, 7, 2))
+        pygame.draw.rect(bg_brick, (72, 54, 64), (2, 11, 9, 2))
+        pygame.draw.rect(bg_brick, PAL_OUTLINE, (0, 0, TILE_SIZE, TILE_SIZE), 1)
+        pygame.draw.line(bg_brick, PAL_OUTLINE, (0, 9), (TILE_SIZE, 9), 1)
+        pygame.draw.line(bg_brick, PAL_OUTLINE, (9, 0), (9, 9), 1)
+        pygame.draw.line(bg_brick, PAL_OUTLINE, (12, 9), (12, TILE_SIZE), 1)
+        sheet_wide = pygame.Surface((TILE_SIZE * 6, TILE_SIZE), pygame.SRCALPHA)
         sheet_wide.blit(sheet, (0, 0))
         sheet_wide.blit(stone, (TILE_SIZE * 4, 0))
+        sheet_wide.blit(bg_brick, (TILE_SIZE * 5, 0))
         pygame.image.save(sheet_wide, "assets/spritesheets/tiles.png")
         meta = {
             "texture": "tiles.png",
@@ -110,7 +132,8 @@ class AssetGenerator:
                 "wall_surface": {"x": TILE_SIZE, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
                 "dirt": {"x": TILE_SIZE * 2, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
                 "rock": {"x": TILE_SIZE * 3, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
-                "stone": {"x": TILE_SIZE * 4, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]}
+                "stone": {"x": TILE_SIZE * 4, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]},
+                "bg_brick": {"x": TILE_SIZE * 5, "y": 0, "w": TILE_SIZE, "h": TILE_SIZE, "pivot": [0.5, 0.5]}
             }
         }
         with open("assets/data/tiles.json", "w", encoding="utf-8") as f:
@@ -330,6 +353,10 @@ class AssetGenerator:
     def generate_cat_miner(force: bool = False) -> None:
         """Generate the Tabby Miner Cat spritesheet if missing."""
         if not force and os.path.exists(f"assets/spritesheets/cat_{CAT_MINER_ID}.png") and os.path.exists(f"assets/data/cat_{CAT_MINER_ID}.json"):
+            return
+        if os.path.exists("assets/raw/cat_miner_raw.jpg"):
+            from engine.banana_pipeline import process_cat_miner
+            process_cat_miner()
             return
         """Generate the Tabby Miner Cat spritesheet with all mandatory animation states.
 

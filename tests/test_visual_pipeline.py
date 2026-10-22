@@ -108,3 +108,15 @@ def test_render_metro_cavern_frame_and_save_debug_screenshot():
     arr = pygame.surfarray.pixels3d(canvas)
     unique_colors = len(np.unique(arr.reshape(-1, 3), axis=0))
     assert unique_colors > 100, f"Rendered frame must contain rich multi-layer visuals, got {unique_colors} colors"
+
+
+def test_generate_tiles_force_preserves_bg_brick():
+    import json
+    from engine.asset_generator import AssetGenerator
+    AssetGenerator.generate_tiles(force=True)
+    with open("assets/data/tiles.json", "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert "bg_brick" in meta["frames"]
+    surf = pygame.image.load("assets/spritesheets/tiles.png")
+    assert surf.get_width() >= 120
+    assert surf.get_height() == 20

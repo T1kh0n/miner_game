@@ -232,6 +232,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: `AssetGenerator.generate_tiles()` only creates 5 tiles (`wall_under`, `wall_surface`, `dirt`, `rock`, `stone`) on a `TILE_SIZE * 5` surface. It does not include `bg_brick`. If `AssetGenerator.generate_tiles(force=True)` is executed, `tiles.png` is truncated from 120px to 100px and `tiles.json` is overwritten, permanently stripping `bg_brick` and breaking cavern background rendering in `PlayState.render()`.
 - **Severity**: High
 - **Location**: `engine/asset_generator.py` (lines 43–125), `assets/spritesheets/tiles.png`, `assets/data/tiles.json`.
+- **Status**: Resolved
 
 #### Issue 1.3: Shale Tile Visual Texture and Collision Representation Missing
 - **Expected**: Biome 1 includes destructible shale mineral blocks requiring multi-hit mining (`SHALE = 6`, `SHALE_MAX_HITS = 3`).
