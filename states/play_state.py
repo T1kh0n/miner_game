@@ -1033,7 +1033,7 @@ class PlayState(State):
         surface.blit(self.play_view, (0, 0))
         self._render_diegetic_hud(surface)
         if self.dialogue_box.is_open:
-            self.dialogue_box.render(surface)
+            self.dialogue_box.render(surface, self.font, self.font_big)
 
         if self._afk_ripples:
             px_s = int(interp_px - cam_x)

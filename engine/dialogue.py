@@ -220,9 +220,14 @@ class DialogueBox:
     def render(
         self,
         surface: pygame.Surface,
-        font: pygame.font.Font,
+        font: pygame.font.Font | None = None,
         font_name: pygame.font.Font | None = None
     ) -> None:
+        if not self.is_open:
+            return
+
+        if font is None:
+            font = LocalizationManager.get().get_font(12)
         """Render dialogue frame, portrait box, speaker name, and typed text."""
         if not self.is_open:
             return
