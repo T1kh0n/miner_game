@@ -324,6 +324,8 @@ def process_cat_driver(
     out_meta: str = "assets/data/cat_driver.json",
 ) -> None:
     """Slice and pack 16 standardized frames for Train Driver Cat from raw image."""
+    if not os.path.exists(raw_path):
+        return
     raw = Image.open(raw_path)
     fw, fh = 32, 36
 
@@ -435,6 +437,8 @@ def process_cat_soldier(
     out_meta: str = "assets/data/cat_soldier.json",
 ) -> None:
     """Slice and pack 24 standardized frames for Watermelon Soldier Cat from raw image."""
+    if not os.path.exists(raw_path):
+        return
     raw = Image.open(raw_path)
     fw, fh = 36, 36
 
@@ -579,6 +583,8 @@ def process_cat_feral(
     out_meta: str = "assets/data/cat_feral.json",
 ) -> None:
     """Slice and pack 24 standardized frames for Wild Chaos Feral Cat from raw image."""
+    if not os.path.exists(raw_path):
+        return
     raw = Image.open(raw_path)
     fw, fh = 36, 36
 
@@ -779,13 +785,13 @@ def process_metro_props(
         }, f, indent=2)
 
     tile_crops = {
-        "wall_under": (980, 40, 1110, 160),
-        "wall_surface": (980, 170, 1110, 220),
-        "dirt": (980, 170, 1110, 290),
+        "wall_under": (994, 40, 1099, 160),
+        "wall_surface": (994, 170, 1110, 220),
+        "dirt": (994, 170, 1110, 290),
         "rock": (380, 440, 500, 560),
-        "stone": (980, 300, 1110, 420),
-        "bg_brick": (1110, 40, 1240, 160),
-        "shale": (980, 300, 1110, 420),
+        "stone": (994, 300, 1110, 404),
+        "bg_brick": (1126, 40, 1235, 160),
+        "shale": (994, 300, 1110, 404),
     }
 
     tile_order = ["wall_under", "wall_surface", "dirt", "rock", "stone", "bg_brick", "shale"]
@@ -796,19 +802,17 @@ def process_metro_props(
         box = tile_crops[name]
         c = chroma_key(raw.crop(box))
         c_tile = c.resize((TILE_SIZE, TILE_SIZE), Image.Resampling.NEAREST)
-        if name == "bg_brick":
+        if name != "rock":
             arr = np.array(c_tile)
-            arr[:, :, :3] = (arr[:, :, :3].astype(float) * 0.45).astype(np.uint8)
-            arr[:, :, 3] = 255
-            c_tile = Image.fromarray(arr)
-        elif name == "shale":
-            arr = np.array(c_tile)
-            arr[:, :, 0] = (arr[:, :, 0].astype(float) * 0.6).astype(np.uint8)
-            arr[:, :, 1] = (arr[:, :, 1].astype(float) * 0.65).astype(np.uint8)
-            arr[:, :, 2] = (arr[:, :, 2].astype(float) * 0.75).astype(np.uint8)
-            arr[2:4, :, :3] = np.clip(arr[2:4, :, :3].astype(float) * 1.3, 0, 255).astype(np.uint8)
-            arr[8:10, :, :3] = (arr[8:10, :, :3].astype(float) * 0.7).astype(np.uint8)
-            arr[14:16, :, :3] = np.clip(arr[14:16, :, :3].astype(float) * 1.2, 0, 255).astype(np.uint8)
+            if name == "bg_brick":
+                arr[:, :, :3] = (arr[:, :, :3].astype(float) * 0.45).astype(np.uint8)
+            elif name == "shale":
+                arr[:, :, 0] = (arr[:, :, 0].astype(float) * 0.6).astype(np.uint8)
+                arr[:, :, 1] = (arr[:, :, 1].astype(float) * 0.65).astype(np.uint8)
+                arr[:, :, 2] = (arr[:, :, 2].astype(float) * 0.75).astype(np.uint8)
+                arr[2:4, :, :3] = np.clip(arr[2:4, :, :3].astype(float) * 1.3, 0, 255).astype(np.uint8)
+                arr[8:10, :, :3] = (arr[8:10, :, :3].astype(float) * 0.7).astype(np.uint8)
+                arr[14:16, :, :3] = np.clip(arr[14:16, :, :3].astype(float) * 1.2, 0, 255).astype(np.uint8)
             arr[:, :, 3] = 255
             c_tile = Image.fromarray(arr)
         x_pos = idx * TILE_SIZE

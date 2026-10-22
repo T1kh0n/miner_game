@@ -120,3 +120,24 @@ def test_generate_tiles_force_preserves_bg_brick():
     surf = pygame.image.load("assets/spritesheets/tiles.png")
     assert surf.get_width() >= 120
     assert surf.get_height() == 20
+
+def test_terrain_tiles_have_no_transparent_seams_or_borders():
+    import json
+    from PIL import Image
+    from engine.banana_pipeline import process_metro_props
+    process_metro_props()
+    with open("assets/data/tiles.json", "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    img = Image.open("assets/spritesheets/tiles.png")
+    arr = np.array(img)
+    solid_tiles = ["wall_under", "wall_surface", "dirt", "stone", "bg_brick", "shale"]
+    for name in solid_tiles:
+        assert name in meta["frames"]
+        fx = meta["frames"][name]["x"]
+        w = meta["frames"][name]["w"]
+        h = meta["frames"][name]["h"]
+        tile = arr[0:h, fx:fx+w]
+        assert np.all(tile[:, 0, 3] == 255)
+        assert np.all(tile[:, -1, 3] == 255)
+        assert np.all(tile[0, :, 3] == 255)
+        assert np.all(tile[-1, :, 3] == 255)

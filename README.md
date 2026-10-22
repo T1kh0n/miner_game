@@ -289,6 +289,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: In `tiles.png`, `wall_under`, `wall_surface`, `dirt`, and `stone` have a 100% transparent left border column (x=0 has 0 non-zero alpha across all 20 rows). `stone` also has a 100% transparent bottom row (y=19). This creates 1px transparent gaps/seams when tiles are placed next to each other.
 - **Severity**: Medium
 - **Location**: `assets/spritesheets/tiles.png`, `assets/data/tiles.json`, `engine/asset_generator.py` (lines 50–115).
+- **Status**: Resolved
 
 #### Issue 2.5: Duplicate and Cloned Slices in Sliced Animation Sequences
 - **Expected**: Each animation frame in character sheets represents a distinct hand-crafted or sliced keyframe.
