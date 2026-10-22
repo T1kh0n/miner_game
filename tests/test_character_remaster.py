@@ -169,3 +169,33 @@ def test_alpha_contamination_and_color_drift():
         mask = arr[:, :, 3] > 0
         means.append(np.mean(arr[mask, 1]))
     assert np.std(means) < 2.0
+
+def test_no_duplicate_animation_slices():
+    from PIL import Image
+    miner_img = Image.open(f"assets/spritesheets/cat_{CAT_MINER_ID}.png")
+    with open(f"assets/data/cat_{CAT_MINER_ID}.json", "r", encoding="utf-8") as f:
+        meta_m = json.load(f)
+    c1_x = meta_m["frames"]["climb_1"]["x"]
+    c3_x = meta_m["frames"]["climb_3"]["x"]
+    w = meta_m["frames"]["climb_1"]["w"]
+    h = meta_m["frames"]["climb_1"]["h"]
+    c1 = np.array(miner_img.crop((c1_x, 0, c1_x + w, h)))
+    c3 = np.array(miner_img.crop((c3_x, 0, c3_x + w, h)))
+    assert not np.array_equal(c1, c3)
+
+    t2_x = meta_m["frames"]["talk_2"]["x"]
+    a2_x = meta_m["frames"]["afk_2"]["x"]
+    t2 = np.array(miner_img.crop((t2_x, 0, t2_x + w, h)))
+    a2 = np.array(miner_img.crop((a2_x, 0, a2_x + w, h)))
+    assert not np.array_equal(t2, a2)
+
+    soldier_img = Image.open("assets/spritesheets/cat_soldier.png")
+    with open("assets/data/cat_soldier.json", "r", encoding="utf-8") as f:
+        meta_s = json.load(f)
+    p1_x = meta_s["frames"]["pinned_1"]["x"]
+    p3_x = meta_s["frames"]["pinned_3"]["x"]
+    sw = meta_s["frames"]["pinned_1"]["w"]
+    sh = meta_s["frames"]["pinned_1"]["h"]
+    p1 = np.array(soldier_img.crop((p1_x, 0, p1_x + sw, sh)))
+    p3 = np.array(soldier_img.crop((p3_x, 0, p3_x + sw, sh)))
+    assert not np.array_equal(p1, p3)

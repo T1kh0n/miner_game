@@ -300,6 +300,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - `cat_miner.png`: `afk_0..2` reuse the exact bounding boxes of `talk_2..3`.
 - **Severity**: Low
 - **Location**: `engine/banana_pipeline.py` (lines 108–130, 428–444).
+- **Status**: Resolved
 
 ---
 
