@@ -805,6 +805,9 @@ class PlayState(State):
             self.cutscene_mgr.update(dt)
         if self.dialogue_box.is_open:
             self.dialogue_box.update(dt)
+            self.player.in_dialogue = True
+        else:
+            self.player.in_dialogue = False
         self.emote_mgr.update(dt)
 
         if self.driver_cat is not None:

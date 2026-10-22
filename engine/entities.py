@@ -4,6 +4,7 @@ import math
 from core.config import (
     TILE_SIZE, CANVAS_W, CANVAS_H, CAT_FRAME_W, CAT_FRAME_H,
     CAT_BODY_W, CAT_BODY_H, ROPE_MAX_LENGTH,
+    AFK_KNOCK_SECONDS, AFK_BLIND_SECONDS,
 )
 from engine.asset_manager import AssetManager
 from core.localization import LocalizationManager
@@ -483,6 +484,10 @@ class Player:
 
         self.afk_timer = 0.0
         self.afk_phase = 0
+        self.hurt_timer = 0.0
+        self.in_dialogue = False
+        self._afk_knock_seconds = AFK_KNOCK_SECONDS
+        self._afk_blind_seconds = AFK_BLIND_SECONDS
 
         self._was_on_ground = False
         self._just_landed = False
@@ -557,10 +562,25 @@ class Player:
             return self.rope_angle
         return 0.0 if self.facing_right else math.pi
 
+    def take_damage(self, amount: float) -> None:
+        self.health -= amount
+        self.hurt_timer = 0.4
+
     def _get_current_frame_key(self) -> str:
         """Determine the correct animation frame key from current player state."""
+        if self.hurt_timer > 0.0:
+            h_idx = int((0.4 - self.hurt_timer) / 0.2) % 2
+            return f"hurt_{h_idx}"
+        if self.in_dialogue:
+            f_idx = int(self.anim_time / 0.2) % 4
+            return f"talk_{f_idx}"
         if self.afk_phase >= 1:
-            idx = min(5, self.afk_phase - 1)
+            if self.afk_timer >= self._afk_blind_seconds:
+                idx = min(5, 4 + int((self.afk_timer - self._afk_blind_seconds + 1e-4) / 0.4) % 2)
+            elif self.afk_timer >= self._afk_knock_seconds:
+                idx = int((self.afk_timer - self._afk_knock_seconds + 1e-4) / 0.4) % 4
+            else:
+                idx = min(5, max(0, self.afk_phase - 1))
             return f"afk_{idx}"
         if self._just_landed:
             return "land_0"
@@ -572,7 +592,14 @@ class Player:
             f_idx = min(3, int(progress * 4))
             return f"action_{f_idx}"
         if not self.on_ground:
-            return "jump_0" if self.body.velocity.y < 0 else "fall_0"
+            if self.body.velocity.y < -120.0:
+                return "jump_0"
+            elif self.body.velocity.y < 0.0:
+                return "jump_1"
+            elif self.body.velocity.y < 150.0:
+                return "fall_0"
+            else:
+                return "fall_1"
         if abs(self.body.velocity.x) > 80.0:
             f_idx = int(self.anim_time / 0.06) % 6
             return f"run_{f_idx}"
@@ -625,15 +652,21 @@ class Player:
         if self.is_dead:
             return
 
+        self._afk_knock_seconds = afk_knock_seconds
+        self._afk_blind_seconds = afk_blind_seconds
+        if self.hurt_timer > 0.0:
+            self.hurt_timer = max(0.0, self.hurt_timer - dt)
         if any_input:
             self.afk_timer = 0.0
             self.afk_phase = 0
         else:
             self.afk_timer += dt
             if self.afk_timer >= afk_blind_seconds:
-                self.afk_phase = 4
+                sub_t = self.afk_timer - afk_blind_seconds
+                self.afk_phase = 4 + int(sub_t / 0.4) % 2
             elif self.afk_timer >= afk_knock_seconds:
-                self.afk_phase = 2
+                sub_t = self.afk_timer - afk_knock_seconds
+                self.afk_phase = 2 + int(sub_t / 0.4) % 4
             else:
                 self.afk_phase = 0
 
@@ -688,6 +721,7 @@ class Player:
             if self.prev_vy > 220.0:
                 dmg = (self.prev_vy - 220.0) * 0.5
                 self.health -= dmg
+                self.hurt_timer = 0.4
                 if self.health <= 0:
                     self.is_dead = True
                     self.death_key = "death_fall"

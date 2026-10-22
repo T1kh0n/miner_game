@@ -117,3 +117,52 @@ def test_afk_frames_exist_and_are_distinct():
         assert sub.get_width() == CAT_FRAME_W
         afk_surfs.append(sub)
     assert len(afk_surfs) == 6
+
+def test_player_controller_selects_all_mandatory_animation_frames():
+    import pymunk
+    from engine.entities import Player
+    space = pymunk.Space()
+    player = Player(100.0, 100.0, "miner", space)
+
+    player.on_ground = False
+    player.body.velocity = (0.0, -200.0)
+    assert player._get_current_frame_key() == "jump_0"
+    player.body.velocity = (0.0, -50.0)
+    assert player._get_current_frame_key() == "jump_1"
+    player.body.velocity = (0.0, 50.0)
+    assert player._get_current_frame_key() == "fall_0"
+    player.body.velocity = (0.0, 200.0)
+    assert player._get_current_frame_key() == "fall_1"
+
+    player.hurt_timer = 0.35
+    assert player._get_current_frame_key() == "hurt_0"
+    player.hurt_timer = 0.1
+    assert player._get_current_frame_key() == "hurt_1"
+    player.hurt_timer = 0.0
+
+    player.in_dialogue = True
+    player.anim_time = 0.0
+    assert player._get_current_frame_key() == "talk_0"
+    player.anim_time = 0.25
+    assert player._get_current_frame_key() == "talk_1"
+    player.anim_time = 0.45
+    assert player._get_current_frame_key() == "talk_2"
+    player.anim_time = 0.65
+    assert player._get_current_frame_key() == "talk_3"
+    player.in_dialogue = False
+
+    player.on_ground = True
+    player.afk_phase = 2
+    player.afk_timer = player._afk_knock_seconds + 0.0
+    assert player._get_current_frame_key() == "afk_0"
+    player.afk_timer = player._afk_knock_seconds + 0.4
+    assert player._get_current_frame_key() == "afk_1"
+    player.afk_timer = player._afk_knock_seconds + 0.8
+    assert player._get_current_frame_key() == "afk_2"
+    player.afk_timer = player._afk_knock_seconds + 1.2
+    assert player._get_current_frame_key() == "afk_3"
+    player.afk_phase = 4
+    player.afk_timer = player._afk_blind_seconds + 0.0
+    assert player._get_current_frame_key() == "afk_4"
+    player.afk_timer = player._afk_blind_seconds + 0.5
+    assert player._get_current_frame_key() == "afk_5"

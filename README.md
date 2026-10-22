@@ -326,6 +326,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - Player `talk_0..3` frames are never triggered during dialogue sequences.
 - **Severity**: High
 - **Location**: `engine/entities.py` (lines 510–535, 570–575).
+- **Status**: Resolved
 
 #### Issue 3.3: Inactive / Unreachable NPC Animation States
 - **Expected**: Interactive NPCs animate according to their situational behaviors (patrol walk, dialogue talk, lantern swing, claw attack).
