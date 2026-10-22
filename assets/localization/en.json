@@ -36,5 +36,14 @@
   "menu_continue": "CONTINUE",
   "driver_greeting": "Greetings, weary miner! The upper bunker gates are sealed, but you can find deeper tunnels ahead. Take these ropes!",
   "soldier_warning": "Halt! Mark-IV Watermelon Armor on duty! Watch your flank, feral cats infested the lower tunnels!",
-  "feral_screech": "Hsss! My feral territory! Get out!"
+  "feral_screech": "Hsss! My feral territory! Get out!",
+  "skin_classic": "CLASSIC",
+  "skin_ruby": "RUBY",
+  "skin_emerald": "EMERALD",
+  "skin_obsidian": "OBSIDIAN",
+  "hint_tool_rope": "Tool: Grappling Rope",
+  "hint_tool_pickaxe": "Tool: Mining Pickaxe",
+  "hud_hook": "HOOK",
+  "hud_rope": "[Rope]",
+  "hud_pickaxe": "[Pickaxe]"
 }

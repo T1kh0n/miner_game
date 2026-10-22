@@ -1371,14 +1371,14 @@ class PlayState(State):
             surface.blit(tool_icon, (slot_x, slot_y))
 
             if self.player.using_rope:
-                status_txt = "HOOK" if (self.player.hook and self.player.hook.attached) else "x1"
+                status_txt = self.loc.get_text("hud_hook", "HOOK") if (self.player.hook and self.player.hook.attached) else f"x{self.player.ropes}"
                 ts = self.font.render(status_txt, True, (220, 240, 255))
                 surface.blit(ts, (slot_x + 28, slot_y + 6))
             else:
                 ts = self.font.render("[Q]", True, (180, 190, 205))
                 surface.blit(ts, (slot_x + 28, slot_y + 6))
         except Exception:
-            tool_name = "[Rope]" if self.player.using_rope else "[Pickaxe]"
+            tool_name = self.loc.get_text("hud_rope", "[Rope]") if self.player.using_rope else self.loc.get_text("hud_pickaxe", "[Pickaxe]")
             ts = self.font.render(tool_name, True, (220, 200, 160))
             surface.blit(ts, (4, CANVAS_H - 18))
 

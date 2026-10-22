@@ -363,6 +363,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - `PlayState.handle_event()` fires hints `tool_rope` and `tool_pickaxe`, but `hint_tool_rope` and `hint_tool_pickaxe` are missing from both `en.json` and `ru.json`, resulting in untranslated English fallback text.
 - **Severity**: High
 - **Location**: `engine/entities.py` (line 617), `assets/localization/ru.json`, `states/play_state.py` (lines 685, 1310–1325), `states/skin_state.py` (line 55).
+- **Status**: Resolved
 
 #### Issue 4.4: Missing Settings Menu and Volume Configuration UI
 - **Expected**: README Section 5 and `assets/localization/en.json` (`menu_settings`) specify engine settings management for master volume, music volume, SFX volume, locale, and fullscreen.

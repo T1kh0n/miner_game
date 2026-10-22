@@ -6,6 +6,7 @@ from core.config import (
     CAT_BODY_W, CAT_BODY_H, ROPE_MAX_LENGTH,
 )
 from engine.asset_manager import AssetManager
+from core.localization import LocalizationManager
 
 PLAYER_BODY_W = CAT_BODY_W
 PLAYER_BODY_H = CAT_BODY_H
@@ -626,7 +627,8 @@ class Player:
                 self.health -= dmg
                 if self.health <= 0:
                     self.is_dead = True
-                    self.death_reason = "РАЗБИЛСЯ НАСМЕРТЬ"
+                    self.death_key = "death_fall"
+                    self.death_reason = LocalizationManager.get().get_text("death_fall", "FELL TO DEATH")
                     camera.add_shake(8.0, 20)
                     particle_emitter(self.body.position.x, self.body.position.y, [(255, 60, 60)], 25)
 
