@@ -125,3 +125,34 @@ def test_feral_combat_damage_and_defeat_runtime():
     ps.feral_cat.invulnerable_timer = 0.0
     ps.update(0.016)
     assert ps.feral_cat.hp < 3
+
+
+def test_blast_door_entity_and_interaction():
+    import pymunk
+    from engine.entities import BlastDoorEntity
+    space = pymunk.Space()
+    door = BlastDoorEntity(500.0, 560.0, space)
+    assert not door.is_open
+    assert door.shape in space.shapes
+
+    test_surf = pygame.Surface((320, 240))
+    door.render(test_surf, 400.0, 500.0)
+
+    door.open()
+    assert door.is_open
+    assert door.shape not in space.shapes
+
+    door.update(0.5)
+    assert door.open_progress > 0.0
+    door.render(test_surf, 400.0, 500.0)
+
+    sm = StateMachine()
+    ps = PlayState(sm)
+    ps.enter()
+    assert ps.blast_door is not None
+    assert not ps.blast_door.is_open
+    assert not ps.blast_door_opened
+
+    ps._on_feral_defeated()
+    assert ps.blast_door.is_open
+    assert ps.blast_door_opened

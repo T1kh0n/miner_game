@@ -247,6 +247,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: `blast_door_opened` is merely a boolean flag in `PlayState` with no visual sprite, level geometry, tile representation, or physics collider in the cavern.
 - **Severity**: Medium
 - **Location**: `states/play_state.py` (lines 160, 424).
+- **Status**: Resolved
 
 #### Issue 1.5: Player Hitbox Height Inconsistency with Specification
 - **Expected**: README Section 3 states: "The player's physical Pymunk shape is locked to a constant bounding box (`PLAYER_BODY_W = 12.0`, `PLAYER_BODY_H = 18.0`)".

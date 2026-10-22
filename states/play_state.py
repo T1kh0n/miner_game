@@ -20,7 +20,7 @@ from core.audio import AudioManager
 from engine.level import Level
 from engine.entities import (
     Player, RockEntity, Particle, ParticlePool, CabinEntity, HookEntity,
-    DriverCatEntity, SoldierCatEntity, FeralCatEntity
+    DriverCatEntity, SoldierCatEntity, FeralCatEntity, BlastDoorEntity
 )
 from core.cutscene import (
     CutsceneManager, MoveCameraTo, MoveEntityTo, Wait,
@@ -161,6 +161,7 @@ class PlayState(State):
         self.soldier_cat = SoldierCatEntity(15.0 * TILE_SIZE, 24.0 * TILE_SIZE, 12.0 * TILE_SIZE, 20.0 * TILE_SIZE)
         self.feral_cutscene_triggered: bool = False
         self.feral_cat = FeralCatEntity(22.0 * TILE_SIZE, 28.0 * TILE_SIZE)
+        self.blast_door: BlastDoorEntity | None = None
         self.blast_door_opened: bool = False
         self.feral_defeated: bool = False
         self.victory_gem_pos: tuple[float, float] | None = None
@@ -409,6 +410,9 @@ class PlayState(State):
         self.soldier_cat = SoldierCatEntity(15.0 * TILE_SIZE, 24.0 * TILE_SIZE, 12.0 * TILE_SIZE, 20.0 * TILE_SIZE)
         self.feral_cutscene_triggered = False
         self.feral_cat = FeralCatEntity(22.0 * TILE_SIZE, 28.0 * TILE_SIZE)
+        if getattr(self, "blast_door", None) is not None and self.blast_door.shape in self.space.shapes:
+            self.space.remove(self.blast_door.shape)
+        self.blast_door = BlastDoorEntity(25.0 * TILE_SIZE, 28.0 * TILE_SIZE, self.space)
         self.blast_door_opened = False
         self.feral_defeated = False
         self.victory_gem_pos = None
@@ -432,6 +436,8 @@ class PlayState(State):
         """Handle victory state when feral cat is defeated."""
         self.feral_defeated = True
         self.blast_door_opened = True
+        if self.blast_door is not None:
+            self.blast_door.open()
         self.victory_gem_pos = (self.feral_cat.x, self.feral_cat.y)
         if self.soldier_cat is not None:
             self.soldier_cat.set_state(SoldierCatEntity.STATE_COMBAT_DEFEND)
@@ -837,6 +843,9 @@ class PlayState(State):
             if self.feral_cat.is_defeated and not self.feral_defeated:
                 self._on_feral_defeated()
 
+        if self.blast_door is not None:
+            self.blast_door.update(dt)
+
         if not self.metro_cutscene_triggered and self.player.body.position.y >= 7.5 * TILE_SIZE:
             self.metro_cutscene_triggered = True
             def _on_metro_done() -> None:
@@ -1073,6 +1082,8 @@ class PlayState(State):
             self.soldier_cat.render(self.play_view, cam_x, cam_y, am)
         if self.feral_cat is not None and not self.feral_defeated:
             self.feral_cat.render(self.play_view, cam_x, cam_y, am)
+        if self.blast_door is not None:
+            self.blast_door.render(self.play_view, cam_x, cam_y)
         if self.victory_gem_pos is not None and not self.victory_gem_collected:
             gx = int(self.victory_gem_pos[0] - cam_x)
             gy = int(self.victory_gem_pos[1] - cam_y)

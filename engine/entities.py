@@ -221,6 +221,63 @@ class CabinEntity:
         pygame.draw.circle(surface, lantern_col, (rx + 4, ry + 14), 2)
 
 
+class BlastDoorEntity:
+    def __init__(self, x: float, y: float, space: pymunk.Space | None = None) -> None:
+        self.x = x
+        self.y = y
+        self.w = 16.0
+        self.h = 40.0
+        self.is_open = False
+        self.open_progress = 0.0
+        self.space = space
+        self.shape: pymunk.Segment | None = None
+        if space is not None:
+            self.shape = pymunk.Segment(space.static_body, (self.x, self.y - self.h / 2.0), (self.x, self.y + self.h / 2.0), 4)
+            self.shape.friction = 0.5
+            self.shape.collision_type = 1
+            space.add(self.shape)
+
+    def open(self) -> None:
+        if not self.is_open:
+            self.is_open = True
+            if self.space is not None and self.shape is not None and self.shape in self.space.shapes:
+                self.space.remove(self.shape)
+
+    def update(self, dt: float) -> None:
+        if self.is_open and self.open_progress < 1.0:
+            self.open_progress = min(1.0, self.open_progress + dt * 1.5)
+
+    def render(self, surface: pygame.Surface, cam_x: float, cam_y: float) -> None:
+        rx = int(self.x - self.w / 2.0 - cam_x)
+        ry = int(self.y - self.h / 2.0 - cam_y)
+        if rx + self.w < -TILE_SIZE or rx > CANVAS_W + TILE_SIZE:
+            return
+        if ry + self.h < -TILE_SIZE or ry > CANVAS_H + TILE_SIZE:
+            return
+
+        frame_w = int(self.w)
+        frame_h = int(self.h)
+        pygame.draw.rect(surface, (36, 40, 48), (rx - 2, ry - 2, frame_w + 4, frame_h + 4))
+        pygame.draw.rect(surface, (60, 66, 78), (rx - 1, ry - 1, frame_w + 2, frame_h + 2), 1)
+
+        for sx in range(rx, rx + frame_w, 4):
+            pygame.draw.line(surface, (230, 180, 20), (sx, ry - 2), (sx + 2, ry - 2), 1)
+            pygame.draw.line(surface, (230, 180, 20), (sx, ry + frame_h + 1), (sx + 2, ry + frame_h + 1), 1)
+
+        lift = int(self.open_progress * (frame_h - 4))
+        visible_h = max(0, frame_h - lift)
+        if visible_h > 0:
+            door_rect = pygame.Rect(rx, ry, frame_w, visible_h)
+            pygame.draw.rect(surface, (85, 92, 105), door_rect)
+            pygame.draw.rect(surface, (120, 130, 145), (rx + 2, ry + 2, frame_w - 4, visible_h - 4), 1)
+            pygame.draw.line(surface, (50, 55, 65), (rx + frame_w // 2, ry), (rx + frame_w // 2, ry + visible_h), 1)
+            for rib_y in range(ry + 8, ry + visible_h - 2, 8):
+                pygame.draw.line(surface, (65, 72, 82), (rx + 2, rib_y), (rx + frame_w - 2, rib_y), 1)
+
+        led_col = (50, 230, 80) if self.open_progress >= 0.9 else (230, 45, 50)
+        pygame.draw.circle(surface, led_col, (rx + frame_w // 2, ry - 5), 2)
+
+
 class HookEntity:
     """Grappling hook projectile with SlideJoint rope physics and pickaxe anchor."""
 
