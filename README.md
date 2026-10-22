@@ -399,6 +399,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - As a result, the feral cat is permanently invincible, the victory gem never spawns, and the combat encounter cannot be completed.
 - **Severity**: Critical
 - **Location**: `states/play_state.py` (lines 421, 795, 830–850), `engine/entities.py` (lines 820–860).
+- **Status**: Resolved
 
 #### Issue 6.2: Automatic Unintended Dirt Digging While Holding Grappling Rope
 - **Expected**: Switching to the rope tool (`Q`) selects rope aiming and grappling mechanics; digging is restricted to pickaxe mode.

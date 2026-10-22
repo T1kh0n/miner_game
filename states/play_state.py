@@ -800,7 +800,36 @@ class PlayState(State):
         if self.soldier_cat is not None:
             self.soldier_cat.update(dt)
         if self.feral_cat is not None:
-            self.feral_cat.update(dt, self.player.body.position.x, self.player.body.position.y)
+            px = self.player.body.position.x
+            py = self.player.body.position.y
+            cam_x, cam_y = self.camera.x, self.camera.y
+            px_s = int(px - cam_x)
+            py_s = int(py - cam_y)
+            mx_canvas, my_canvas = getattr(self.manager, "mouse_pos", self.mouse_canvas_pos)
+            cursor_angle = math.atan2(my_canvas - py_s, mx_canvas - px_s)
+            angle_rad = self.player.get_flashlight_angle_rad(cursor_angle)
+
+            dx = self.feral_cat.x - px
+            dy = self.feral_cat.y - py
+            dist = math.hypot(dx, dy)
+            cat_angle = math.atan2(dy, dx)
+            diff_angle = abs((cat_angle - angle_rad + math.pi) % (2.0 * math.pi) - math.pi)
+
+            is_illuminated = (dist < 140.0 and diff_angle < math.radians(45.0)) or (dist < 32.0)
+            self.feral_cat.update(dt, px, py, is_illuminated=is_illuminated)
+
+            if not self.feral_cat.is_defeated and not self.cutscene_mgr.is_active:
+                if dist < 32.0 and (self.player.is_digging or up or down or left or right):
+                    knockback = 1.0 if px < self.feral_cat.x else -1.0
+                    defeated = self.feral_cat.take_damage(1, knockback)
+                    self.camera.add_shake(1.5, 4)
+                    self.emit_particles(self.feral_cat.x, self.feral_cat.y, [(255, 60, 60), (220, 200, 220)], 10)
+                    self._audio.play("pickaxe_clink")
+                    if defeated:
+                        self._on_feral_defeated()
+
+            if self.feral_cat.is_defeated and not self.feral_defeated:
+                self._on_feral_defeated()
 
         if not self.metro_cutscene_triggered and self.player.body.position.y >= 7.5 * TILE_SIZE:
             self.metro_cutscene_triggered = True

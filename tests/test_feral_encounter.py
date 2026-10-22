@@ -110,3 +110,18 @@ def test_feral_ambush_cutscene_and_defeat_victory():
 
     assert ps.victory_gem_collected
     assert ps.score >= initial_score + 100
+
+
+def test_feral_combat_damage_and_defeat_runtime():
+    sm = StateMachine()
+    sm.leaderboard = LeaderboardManager()
+    sm.selected_skin = "miner"
+    ps = PlayState(sm)
+    ps.enter()
+    ps.player.body.position = (ps.feral_cat.x - 20.0, ps.feral_cat.y)
+    ps.feral_cutscene_triggered = True
+    ps.cutscene_mgr.is_active = False
+    ps.player.is_digging = True
+    ps.feral_cat.invulnerable_timer = 0.0
+    ps.update(0.016)
+    assert ps.feral_cat.hp < 3
