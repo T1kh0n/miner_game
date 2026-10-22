@@ -387,6 +387,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: In `engine/ui.py` (`UILabel.render` and `UIButton.render`), `font.render()` and `pygame.transform.smoothscale()` are called unconditionally on every render tick for every active label and button, instead of caching the rendered text surface until content or locale changes.
 - **Severity**: Low
 - **Location**: `engine/ui.py` (lines 45–60, 85–105).
+- **Status**: Resolved
 
 ---
 
