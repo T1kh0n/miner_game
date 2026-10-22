@@ -381,10 +381,16 @@ class Player:
                     idle_surf, PLAYER_BODY_W, PLAYER_BODY_H
                 )
             except Exception:
-                self.w = PLAYER_BODY_W
-                self.h = PLAYER_BODY_H
-                self.offset_x = CAT_FRAME_W / 2.0
-                self.offset_y = 21.0
+                try:
+                    idle_surf = asset_mgr.get_sprite(f"player_{skin_id}", "idle_0")
+                    self.w, self.h, self.offset_x, self.offset_y = calculate_sprite_hitbox(
+                        idle_surf, PLAYER_BODY_W, PLAYER_BODY_H
+                    )
+                except Exception:
+                    self.w = PLAYER_BODY_W
+                    self.h = PLAYER_BODY_H
+                    self.offset_x = CAT_FRAME_W / 2.0
+                    self.offset_y = 21.0
         else:
             self.w = PLAYER_BODY_W
             self.h = PLAYER_BODY_H
@@ -710,11 +716,14 @@ class Player:
             sprite = asset_mgr.get_sprite(bundle, frame_key)
         except (KeyError, Exception):
             fallback_bundle = f"player_{self.skin_id}"
-            fallback_frame = "idle_0" if "idle" in frame_key else "walk_0"
             try:
-                sprite = asset_mgr.get_sprite(fallback_bundle, fallback_frame)
-            except Exception:
-                return
+                sprite = asset_mgr.get_sprite(fallback_bundle, frame_key)
+            except (KeyError, Exception):
+                fallback_frame = "idle_0" if "idle" in frame_key else "walk_0"
+                try:
+                    sprite = asset_mgr.get_sprite(fallback_bundle, fallback_frame)
+                except Exception:
+                    return
 
         ox = self.offset_x
         oy = self.offset_y

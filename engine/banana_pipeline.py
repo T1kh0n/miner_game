@@ -7,7 +7,7 @@ from core.config import (
 )
 
 
-def chroma_key(img: Image.Image, tol: int = 60) -> Image.Image:
+def chroma_key(img: Image.Image, tol: int = 70) -> Image.Image:
     """Convert an RGB or RGBA image to RGBA and make the magenta background transparent."""
     img_rgba = img.convert("RGBA")
     arr = np.array(img_rgba)
@@ -83,40 +83,48 @@ def process_cat_miner(
     raw = Image.open(raw_path)
 
     idle_boxes = [
-        (24, 7, 166, 163),
-        (188, 7, 332, 163),
-        (361, 7, 505, 163),
-        (531, 7, 674, 163),
+        (35, 14, 155, 178),
+        (168, 14, 289, 179),
+        (300, 14, 421, 179),
+        (433, 14, 554, 179),
     ]
     walk_boxes = [
-        (21, 173, 157, 337),
-        (200, 173, 335, 337),
-        (371, 173, 509, 337),
-        (542, 173, 683, 337),
-        (715, 173, 855, 337),
-        (885, 173, 1025, 337),
-        (1063, 173, 1199, 337),
+        (35, 197, 157, 364),
+        (171, 196, 300, 364),
+        (311, 196, 443, 364),
+        (457, 196, 589, 364),
+        (600, 196, 741, 364),
+        (755, 196, 894, 364),
+        (906, 196, 1039, 364),
+        (1051, 196, 1182, 362),
+        (1199, 196, 1338, 364),
     ]
     action_boxes = [
-        (12, 378, 174, 550),
-        (196, 377, 408, 550),
-        (458, 373, 666, 550),
-        (684, 380, 890, 550),
-    ]
-    hurt_boxes = [
-        (936, 373, 1102, 550),
-        (1142, 373, 1305, 550),
+        (29, 385, 187, 554),
+        (207, 385, 387, 554),
+        (403, 385, 585, 554),
+        (602, 385, 785, 554),
     ]
     climb_boxes = [
-        (31, 578, 149, 765),
-        (194, 578, 311, 765),
-        (359, 575, 473, 765),
-        (517, 575, 636, 765),
+        (802, 385, 983, 554),
+        (997, 382, 1131, 555),
+        (1178, 382, 1311, 555),
+        (997, 382, 1131, 555),
+    ]
+    hurt_boxes = [
+        (32, 584, 195, 760),
+        (212, 583, 350, 760),
+    ]
+    talk_boxes = [
+        (384, 583, 525, 760),
+        (679, 584, 842, 760),
+        (851, 585, 1003, 760),
+        (1019, 584, 1173, 760),
     ]
     afk_boxes = [
-        (825, 589, 978, 766),
-        (1013, 588, 1167, 766),
-        (1202, 589, 1355, 766),
+        (1019, 584, 1173, 760),
+        (1181, 584, 1345, 760),
+        (851, 585, 1003, 760),
     ]
 
     frames_dict: dict[str, Image.Image] = {}
@@ -199,8 +207,7 @@ def process_cat_miner(
             y_shift=0,
         )
 
-    for i in range(4):
-        box = idle_boxes[i]
+    for i, box in enumerate(talk_boxes):
         frames_dict[f"talk_{i}"] = normalize_frame(
             chroma_key(raw.crop(box)),
             CAT_FRAME_W, CAT_FRAME_H,
@@ -227,6 +234,13 @@ def process_cat_miner(
         arr[2:8, 14:22, 2] = np.clip(arr[2:8, 14:22, 2].astype(int) + 40, 0, 255)
         arr[2:8, 14:22, 3] = np.maximum(arr[2:8, 14:22, 3], glow_alpha)
         frames_dict[f"afk_{3 + i}"] = Image.fromarray(arr)
+
+    # Palette enhancement for idle_0 features
+    arr_0 = np.array(frames_dict["idle_0"])
+    arr_0[4:8, 14:22, :3] = [230, 185, 40]
+    arr_0[4:7, 21:24, :3] = [255, 245, 170]
+    arr_0[16:22, 15:21, :3] = [85, 105, 55]
+    frames_dict["idle_0"] = Image.fromarray(arr_0)
 
     ordered_keys = [
         "idle_0", "idle_1", "idle_2", "idle_3",
@@ -276,6 +290,403 @@ def process_cat_miner(
     classic_meta = "assets/data/player_classic.json"
     sheet.save(classic_sheet)
     with open(classic_meta, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+    skin_tints = {
+        "ruby": (220, 50, 60),
+        "emerald": (40, 190, 80),
+        "obsidian": (120, 60, 150),
+    }
+    arr = np.array(sheet, dtype=np.float32)
+    rgb = arr[:, :, :3]
+    lum = 0.299 * rgb[:, :, 0:1] + 0.587 * rgb[:, :, 1:2] + 0.114 * rgb[:, :, 2:3]
+    for skin_name, (tr, tg, tb) in skin_tints.items():
+        tint_rgb = np.zeros_like(rgb)
+        tint_rgb[:, :, 0] = lum[:, :, 0] * (tr / 255.0) * 1.3
+        tint_rgb[:, :, 1] = lum[:, :, 0] * (tg / 255.0) * 1.3
+        tint_rgb[:, :, 2] = lum[:, :, 0] * (tb / 255.0) * 1.3
+        blended = np.clip(0.4 * rgb + 0.6 * tint_rgb, 0, 255)
+        out = np.dstack([blended, arr[:, :, 3]]).astype(np.uint8)
+        skin_img = Image.fromarray(out, "RGBA")
+        skin_img.save(f"assets/spritesheets/player_{skin_name}.png")
+        skin_meta = dict(meta)
+        skin_meta["texture"] = f"player_{skin_name}.png"
+        with open(f"assets/data/player_{skin_name}.json", "w", encoding="utf-8") as f:
+            json.dump(skin_meta, f, indent=2)
+
+
+def process_cat_driver(
+    raw_path: str = "assets/raw/cat_driver_raw.jpg",
+    out_sheet: str = "assets/spritesheets/cat_driver.png",
+    out_meta: str = "assets/data/cat_driver.json",
+) -> None:
+    """Slice and pack 16 standardized frames for Train Driver Cat from raw image."""
+    raw = Image.open(raw_path)
+    fw, fh = 32, 36
+
+    idle_boxes = [
+        (22, 21, 175, 182),
+        (191, 21, 344, 182),
+        (359, 21, 512, 182),
+        (526, 21, 679, 182),
+    ]
+    walk_boxes = [
+        (26, 196, 195, 370),
+        (213, 196, 382, 370),
+        (399, 196, 580, 370),
+        (598, 196, 774, 370),
+    ]
+    action_boxes = [
+        (26, 382, 217, 559),
+        (246, 382, 474, 559),
+        (495, 382, 693, 559),
+        (714, 382, 918, 559),
+    ]
+    talk_boxes = [
+        (79, 573, 260, 763),
+        (295, 573, 476, 763),
+        (510, 573, 688, 763),
+        (717, 573, 894, 763),
+    ]
+
+    frames_dict: dict[str, Image.Image] = {}
+
+    for i, box in enumerate(idle_boxes):
+        frames_dict[f"idle_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, target_center_x=16,
+            y_shift=(1 if i in (1, 2) else 0),
+        )
+
+    for i, box in enumerate(walk_boxes):
+        frames_dict[f"walk_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, target_center_x=16,
+            y_shift=(-1 if i % 2 == 1 else 0),
+        )
+
+    for i, box in enumerate(action_boxes):
+        frames_dict[f"action_lantern_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, target_center_x=16,
+        )
+
+    for i, box in enumerate(talk_boxes):
+        frames_dict[f"talk_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, target_center_x=16,
+            y_shift=(-1 if i % 2 == 1 else 0),
+        )
+
+    # Feature enhancement for driver
+    arr_0 = np.array(frames_dict["idle_0"])
+    arr_0[5:8, 15:18, :3] = [245, 210, 45]
+    arr_0[8:12, 10:13, :3] = [185, 175, 165]
+    frames_dict["idle_0"] = Image.fromarray(arr_0)
+
+    arr_act = np.array(frames_dict["action_lantern_2"])
+    arr_act[12:18, 20:26, :3] = [255, 235, 130]
+    frames_dict["action_lantern_2"] = Image.fromarray(arr_act)
+
+    ordered_keys = [
+        "idle_0", "idle_1", "idle_2", "idle_3",
+        "walk_0", "walk_1", "walk_2", "walk_3",
+        "action_lantern_0", "action_lantern_1", "action_lantern_2", "action_lantern_3",
+        "talk_0", "talk_1", "talk_2", "talk_3",
+    ]
+
+    sheet = Image.new("RGBA", (fw * len(ordered_keys), fh), (0, 0, 0, 0))
+    frames_meta = {}
+
+    for idx, key in enumerate(ordered_keys):
+        f_img = frames_dict[key]
+        x_pos = idx * fw
+        sheet.paste(f_img, (x_pos, 0))
+        frames_meta[key] = {
+            "x": x_pos,
+            "y": 0,
+            "w": fw,
+            "h": fh,
+            "pivot": [0.5, 0.75],
+        }
+
+    os.makedirs(os.path.dirname(out_sheet), exist_ok=True)
+    os.makedirs(os.path.dirname(out_meta), exist_ok=True)
+    sheet.save(out_sheet)
+
+    meta = {
+        "texture": os.path.basename(out_sheet),
+        "frame_width": fw,
+        "frame_height": fh,
+        "collider": {"w": 12, "h": 26, "offset_x": 16, "offset_y": 21},
+        "frames": frames_meta,
+    }
+    with open(out_meta, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+
+def process_cat_soldier(
+    raw_path: str = "assets/raw/cat_soldier_raw.jpg",
+    out_sheet: str = "assets/spritesheets/cat_soldier.png",
+    out_meta: str = "assets/data/cat_soldier.json",
+) -> None:
+    """Slice and pack 24 standardized frames for Watermelon Soldier Cat from raw image."""
+    raw = Image.open(raw_path)
+    fw, fh = 36, 36
+
+    idle_boxes = [
+        (22, 6, 194, 180),
+        (200, 6, 368, 180),
+        (375, 20, 543, 180),
+        (550, 20, 718, 180),
+    ]
+    walk_boxes = [
+        (21, 188, 198, 364),
+        (205, 203, 375, 364),
+        (376, 203, 551, 364),
+        (559, 203, 731, 364),
+    ]
+    action_boxes = [
+        (25, 391, 201, 559),
+        (214, 391, 406, 559),
+        (412, 391, 607, 559),
+        (622, 391, 845, 559),
+    ]
+    hurt_boxes = [
+        (905, 393, 1063, 559),
+        (1144, 391, 1347, 558),
+        (860, 6, 1080, 180),
+        (1080, 6, 1356, 180),
+    ]
+    talk_boxes = [
+        (26, 571, 166, 767),
+        (223, 586, 362, 767),
+        (419, 586, 557, 767),
+        (26, 571, 166, 767),
+    ]
+    pinned_boxes = [
+        (694, 571, 900, 767),
+        (918, 571, 1120, 766),
+        (1145, 633, 1341, 766),
+        (918, 571, 1120, 766),
+    ]
+
+    frames_dict: dict[str, Image.Image] = {}
+
+    for i, box in enumerate(idle_boxes):
+        frames_dict[f"idle_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, y_shift=(1 if i in (1, 2) else 0),
+        )
+
+    for i, box in enumerate(walk_boxes):
+        frames_dict[f"walk_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, y_shift=(-1 if i % 2 == 1 else 0),
+        )
+
+    for i, box in enumerate(action_boxes):
+        frames_dict[f"action_shovel_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh,
+        )
+
+    for i, box in enumerate(hurt_boxes):
+        frames_dict[f"hurt_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh,
+        )
+
+    for i, box in enumerate(talk_boxes):
+        frames_dict[f"talk_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, y_shift=(-1 if i % 2 == 1 else 0),
+        )
+
+    for i, box in enumerate(pinned_boxes):
+        frames_dict[f"pinned_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, y_shift=2,
+        )
+
+    # Feature enhancement for soldier
+    arr_0 = np.array(frames_dict["idle_0"])
+    arr_0[4:10, 14:22, :3] = [60, 145, 55]
+    arr_0[10:12, 14:22, :3] = [230, 60, 75]
+    frames_dict["idle_0"] = Image.fromarray(arr_0)
+
+    arr_act = np.array(frames_dict["action_shovel_1"])
+    arr_act[14:20, 24:30, :3] = [195, 205, 220]
+    frames_dict["action_shovel_1"] = Image.fromarray(arr_act)
+
+    ordered_keys = [
+        "idle_0", "idle_1", "idle_2", "idle_3",
+        "walk_0", "walk_1", "walk_2", "walk_3",
+        "action_shovel_0", "action_shovel_1", "action_shovel_2", "action_shovel_3",
+        "hurt_0", "hurt_1", "hurt_2", "hurt_3",
+        "talk_0", "talk_1", "talk_2", "talk_3",
+        "pinned_0", "pinned_1", "pinned_2", "pinned_3",
+    ]
+
+    sheet = Image.new("RGBA", (fw * len(ordered_keys), fh), (0, 0, 0, 0))
+    frames_meta = {}
+
+    for idx, key in enumerate(ordered_keys):
+        f_img = frames_dict[key]
+        x_pos = idx * fw
+        sheet.paste(f_img, (x_pos, 0))
+        frames_meta[key] = {
+            "x": x_pos,
+            "y": 0,
+            "w": fw,
+            "h": fh,
+            "pivot": [0.5, 0.75],
+        }
+
+    os.makedirs(os.path.dirname(out_sheet), exist_ok=True)
+    os.makedirs(os.path.dirname(out_meta), exist_ok=True)
+    sheet.save(out_sheet)
+
+    meta = {
+        "texture": os.path.basename(out_sheet),
+        "frame_width": fw,
+        "frame_height": fh,
+        "collider": {"w": 12, "h": 26, "offset_x": 18, "offset_y": 21},
+        "frames": frames_meta,
+    }
+    with open(out_meta, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+
+def process_cat_feral(
+    raw_path: str = "assets/raw/cat_feral_raw.jpg",
+    out_sheet: str = "assets/spritesheets/cat_feral.png",
+    out_meta: str = "assets/data/cat_feral.json",
+) -> None:
+    """Slice and pack 24 standardized frames for Wild Chaos Feral Cat from raw image."""
+    raw = Image.open(raw_path)
+    fw, fh = 36, 36
+
+    idle_boxes = [
+        (29, 15, 135, 144),
+        (199, 15, 304, 144),
+        (372, 15, 477, 144),
+        (543, 15, 648, 144),
+    ]
+    run_boxes = [
+        (14, 162, 169, 257),
+        (185, 162, 339, 257),
+        (354, 162, 511, 257),
+        (525, 162, 681, 253),
+    ]
+    pounce_boxes = [
+        (27, 287, 157, 384),
+        (180, 291, 311, 384),
+        (338, 279, 484, 384),
+        (504, 265, 674, 379),
+    ]
+    action_boxes = [
+        (312, 398, 476, 514),
+        (509, 401, 680, 514),
+        (704, 398, 859, 514),
+        (877, 398, 1030, 514),
+    ]
+    talk_boxes = [
+        (29, 526, 131, 642),
+        (164, 526, 266, 642),
+        (296, 527, 401, 642),
+        (430, 526, 536, 642),
+    ]
+    hurt_boxes = [
+        (31, 654, 144, 768),
+        (169, 654, 278, 768),
+        (303, 654, 408, 768),
+        (435, 656, 535, 768),
+    ]
+
+    frames_dict: dict[str, Image.Image] = {}
+
+    for i, box in enumerate(idle_boxes):
+        frames_dict[f"idle_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, y_shift=(1 if i in (1, 2) else 0),
+        )
+
+    for i, box in enumerate(run_boxes):
+        frames_dict[f"run_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, x_shift=1,
+            y_shift=(-1 if i % 2 == 1 else 0),
+        )
+
+    for i, box in enumerate(pounce_boxes):
+        frames_dict[f"pounce_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, y_shift=-1,
+        )
+
+    for i, box in enumerate(action_boxes):
+        frames_dict[f"action_slash_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh,
+        )
+
+    for i, box in enumerate(talk_boxes):
+        frames_dict[f"talk_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh, y_shift=(-1 if i % 2 == 1 else 0),
+        )
+
+    for i, box in enumerate(hurt_boxes):
+        frames_dict[f"hurt_{i}"] = normalize_frame(
+            chroma_key(raw.crop(box)),
+            fw, fh,
+        )
+
+    # Feature enhancement for feral
+    arr_0 = np.array(frames_dict["idle_0"])
+    arr_0[10:14, 14:22, :3] = [250, 250, 250]
+    arr_0[15:18, 15:21, :3] = [215, 45, 50]
+    arr_0[9:11, 15:17, :3] = [245, 40, 50]
+    arr_0[9:11, 19:21, :3] = [45, 140, 245]
+    frames_dict["idle_0"] = Image.fromarray(arr_0)
+
+    ordered_keys = [
+        "idle_0", "idle_1", "idle_2", "idle_3",
+        "run_0", "run_1", "run_2", "run_3",
+        "pounce_0", "pounce_1", "pounce_2", "pounce_3",
+        "action_slash_0", "action_slash_1", "action_slash_2", "action_slash_3",
+        "talk_0", "talk_1", "talk_2", "talk_3",
+        "hurt_0", "hurt_1", "hurt_2", "hurt_3",
+    ]
+
+    sheet = Image.new("RGBA", (fw * len(ordered_keys), fh), (0, 0, 0, 0))
+    frames_meta = {}
+
+    for idx, key in enumerate(ordered_keys):
+        f_img = frames_dict[key]
+        x_pos = idx * fw
+        sheet.paste(f_img, (x_pos, 0))
+        frames_meta[key] = {
+            "x": x_pos,
+            "y": 0,
+            "w": fw,
+            "h": fh,
+            "pivot": [0.5, 0.75],
+        }
+
+    os.makedirs(os.path.dirname(out_sheet), exist_ok=True)
+    os.makedirs(os.path.dirname(out_meta), exist_ok=True)
+    sheet.save(out_sheet)
+
+    meta = {
+        "texture": os.path.basename(out_sheet),
+        "frame_width": fw,
+        "frame_height": fh,
+        "collider": {"w": 14, "h": 24, "offset_x": 18, "offset_y": 21},
+        "frames": frames_meta,
+    }
+    with open(out_meta, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
 
 
@@ -413,5 +824,8 @@ def process_ui_icons(
 def run_pipeline() -> None:
     """Execute all asset extraction jobs from raw images into assets/ directories."""
     process_cat_miner()
+    process_cat_driver()
+    process_cat_soldier()
+    process_cat_feral()
     process_metro_props()
     process_ui_icons()

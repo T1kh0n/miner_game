@@ -28,6 +28,9 @@ class AssetGenerator:
             ("assets/spritesheets/cat_driver.png", "assets/data/cat_driver.json"),
             ("assets/spritesheets/cat_soldier.png", "assets/data/cat_soldier.json"),
             ("assets/spritesheets/cat_feral.png", "assets/data/cat_feral.json"),
+            ("assets/spritesheets/player_ruby.png", "assets/data/player_ruby.json"),
+            ("assets/spritesheets/player_emerald.png", "assets/data/player_emerald.json"),
+            ("assets/spritesheets/player_obsidian.png", "assets/data/player_obsidian.json"),
         ]
         needs_pipeline = force or any(not (os.path.exists(p) and os.path.exists(j)) for p, j in needed_remasters)
         if needs_pipeline:
@@ -188,6 +191,10 @@ class AssetGenerator:
     def generate_player_skin(skin_id: str, pal: dict, force: bool = False) -> None:
         """Generate a legacy human miner player skin spritesheet if missing."""
         if not force and os.path.exists(f"assets/spritesheets/player_{skin_id}.png") and os.path.exists(f"assets/data/player_{skin_id}.json"):
+            return
+        if os.path.exists("assets/raw/cat_miner_raw.jpg"):
+            from engine.banana_pipeline import process_cat_miner
+            process_cat_miner()
             return
         fw = TILE_SIZE + 8
         fh = TILE_SIZE + 4

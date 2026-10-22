@@ -336,9 +336,9 @@ class PlayState(State):
                     self.level.grid[y][x] = EMPTY
                     self.rocks.append(RockEntity(x, y, self.space))
 
-        skin = getattr(self.manager, "selected_skin", CAT_MINER_ID)
-        if skin not in ("miner",):
-            skin = CAT_MINER_ID
+        skin = getattr(self.manager, "selected_skin", "classic")
+        if skin not in ("miner", "classic", "ruby", "emerald", "obsidian"):
+            skin = "classic" 
         spawn_x, spawn_y = self.level.spawn_x, self.level.spawn_y
         self.player = Player(spawn_x, spawn_y, skin, self.space, AssetManager.get())
         self.player.death_key = "death_cave_in"
@@ -584,6 +584,8 @@ class PlayState(State):
                 return
 
         snap = self.last_checkpoint_snapshot
+        if hasattr(snap.player, "skin_id") and snap.player.skin_id:
+            self.player.skin_id = snap.player.skin_id
         self.player.is_dead = False
         self.player.death_key = ""
         self.player.death_reason = ""

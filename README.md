@@ -226,6 +226,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: In `PlayState.enter()` (`states/play_state.py`, lines 343–345), `skin` is unconditionally hardcoded via `if skin not in ("miner",): skin = CAT_MINER_ID`. Any skin selected in `SkinState` is ignored. Furthermore, `player_ruby.png`, `player_emerald.png`, and `player_obsidian.png` are legacy 28x24 human miner spritesheets (20 frames) that lack all cat animation states; if loaded, `Player.render()` falls back to static `idle_0` or `walk_0` for every action.
 - **Severity**: High
 - **Location**: `states/play_state.py` (lines 343–345), `states/skin_state.py`, `assets/spritesheets/player_{ruby,emerald,obsidian}.png`.
+- **Status**: Resolved
 
 #### Issue 1.2: Cavern Background Brick Tile Deletion on Asset Regeneration
 - **Expected**: Procedural tile generation (`AssetGenerator.generate_tiles()`) creates and preserves all environment tiles, including `bg_brick` used for cavern wall backdrops.
