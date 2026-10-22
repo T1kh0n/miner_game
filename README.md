@@ -419,3 +419,4 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: In `PlayState.update()` (line 755), `if (jump and self.player.on_ground) or (self.player.body.velocity.y < -30.0):` automatically calls `_dig_tile()` on blocks above the player. Any vertical launch, explosion recoil, or rope swing velocity exceeding -30 px/s unintentionally destroys ceiling blocks above the player.
 - **Severity**: Medium
 - **Location**: `states/play_state.py` (lines 755–760).
+- **Status**: Resolved

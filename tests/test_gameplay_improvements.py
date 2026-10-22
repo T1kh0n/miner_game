@@ -192,3 +192,45 @@ def test_menu_state_continue_button_slot1():
         assert menu.btn_continue.visible is True
     finally:
         save_mgr.delete_slot(1)
+
+
+def test_ceiling_digging_requires_deliberate_input():
+    from core.config import DIRT, EMPTY, TILE_SIZE
+
+    sm = StateMachine()
+    ps = PlayState(sm)
+    ps.enter()
+
+    ps.player.body.velocity = (0.0, -100.0)
+
+    px = ps.player.body.position.x
+    py = ps.player.body.position.y
+    hw = ps.player.w / 2.0
+    hh = ps.player.h / 2.0
+    above_y = int((py - hh - 2.0) // TILE_SIZE)
+    test_x = int(px // TILE_SIZE)
+    ps.level.grid[above_y][test_x] = DIRT
+
+    class EmptyKeys:
+        def __getitem__(self, k):
+            return False
+
+    orig_get_pressed = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: EmptyKeys()
+    try:
+        ps.update(0.05)
+        assert ps.level.grid[above_y][test_x] == DIRT
+    finally:
+        pygame.key.get_pressed = orig_get_pressed
+
+    class JumpKeys:
+        def __getitem__(self, k):
+            return k == pygame.K_SPACE
+
+    pygame.key.get_pressed = lambda: JumpKeys()
+    try:
+        ps.player.body.velocity = (0.0, -100.0)
+        ps.update(0.05)
+        assert ps.level.grid[above_y][test_x] == EMPTY
+    finally:
+        pygame.key.get_pressed = orig_get_pressed
