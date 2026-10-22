@@ -199,3 +199,25 @@ def test_no_duplicate_animation_slices():
     p1 = np.array(soldier_img.crop((p1_x, 0, p1_x + sw, sh)))
     p3 = np.array(soldier_img.crop((p3_x, 0, p3_x + sw, sh)))
     assert not np.array_equal(p1, p3)
+
+def test_standard_matrix_keys_available_on_all_characters():
+    am = AssetManager.get()
+    standard_keys = [
+        *[f"idle_{i}" for i in range(4)],
+        *[f"walk_{i}" for i in range(8)],
+        *[f"run_{i}" for i in range(6)],
+        *[f"jump_{i}" for i in range(2)],
+        *[f"fall_{i}" for i in range(2)],
+        "land_0",
+        *[f"action_{i}" for i in range(4)],
+        *[f"climb_{i}" for i in range(4)],
+        *[f"hurt_{i}" for i in range(2)],
+        *[f"talk_{i}" for i in range(4)],
+        *[f"afk_{i}" for i in range(6)],
+    ]
+    for char_id in [f"cat_{CAT_MINER_ID}", "cat_driver", "cat_soldier", "cat_feral"]:
+        for k in standard_keys:
+            s = am.get_sprite(char_id, k)
+            assert s is not None
+            assert s.get_width() > 0
+            assert s.get_height() > 0

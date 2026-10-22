@@ -314,6 +314,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - `cat_feral.json`: Contains only 24 frames. Completely lacks `walk`, `jump`, `fall`, `land`, `climb`, and `afk`. Run has only 4 frames instead of 6. Uses non-standard key `action_slash_0..3` instead of `action_0..3`. Has 4 hurt frames instead of 2.
 - **Severity**: Critical
 - **Location**: `assets/data/cat_driver.json`, `cat_soldier.json`, `cat_feral.json`, `engine/banana_pipeline.py`.
+- **Status**: Resolved
 
 #### Issue 3.2: Player Controller Ignores Multiple Mandatory Animation Frames
 - **Expected**: Player state machine displays `jump_0..1`, `fall_0..1`, `hurt_0..1`, and `afk_0..5` during corresponding gameplay states.
