@@ -93,3 +93,24 @@ def test_shale_multi_hit_and_cracks() -> None:
     assert (sx, sy) not in ps.block_hits
     assert (sx, sy) in ps.mined_tile_coords
     assert (sx, sy) not in ps.tile_shapes
+
+
+def test_level_generates_shale_and_playstate_creates_collision():
+    from engine.level import Level
+
+    lvl = Level(seed=42)
+    shale_count = sum(row.count(SHALE) for row in lvl.grid)
+    assert shale_count > 0
+
+    sm = StateMachine()
+    ps = PlayState(sm)
+    ps.enter()
+
+    shale_tiles_in_level = [
+        (x, y) for y in range(ps.level.h) for x in range(ps.level.w)
+        if ps.level.grid[y][x] == SHALE
+    ]
+    assert len(shale_tiles_in_level) > 0
+
+    for sx, sy in shale_tiles_in_level[:5]:
+        assert (sx, sy) in ps.tile_shapes

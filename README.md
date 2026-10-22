@@ -413,6 +413,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: `Level.generate()` in `engine/level.py` never places `SHALE` tiles into the world grid. `SHALE` blocks only exist in isolated unit test mocks. Furthermore, `PlayState.enter()` does not add physics collision shapes for `SHALE` tiles.
 - **Severity**: High
 - **Location**: `engine/level.py` (lines 25–180), `states/play_state.py` (lines 335–340).
+- **Status**: Resolved
 
 #### Issue 6.4: Unintended Ceiling Destruction on Upward Velocity
 - **Expected**: Ceiling digging occurs only upon deliberate upward action.

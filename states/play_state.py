@@ -328,7 +328,7 @@ class PlayState(State):
         for y in range(GRID_H):
             for x in range(GRID_W):
                 tile = self.level.grid[y][x]
-                if tile in (WALL, DIRT, STONE):
+                if tile in (WALL, DIRT, STONE, SHALE):
                     self.add_static_tile(x, y)
                 elif tile == ROCK:
                     self.level.grid[y][x] = EMPTY
@@ -1022,8 +1022,23 @@ class PlayState(State):
                         self.play_view.blit(am.get_sprite("tiles", "dirt"), (rx, ry))
                     elif cell == STONE:
                         self.play_view.blit(am.get_sprite("tiles", "stone"), (rx, ry))
+                    elif cell == SHALE:
+                        try:
+                            self.play_view.blit(am.get_sprite("tiles", "shale"), (rx, ry))
+                        except Exception:
+                            self.play_view.blit(am.get_sprite("tiles", "stone"), (rx, ry))
                     elif cell == COIN:
                         self.play_view.blit(coin_frame, (rx, ry))
+
+                    if (x, y) in self.block_hits:
+                        hits = self.block_hits[(x, y)]
+                        crack_col = (22, 18, 24)
+                        if hits >= 1:
+                            pygame.draw.line(self.play_view, crack_col, (rx + 4, ry + 3), (rx + 11, ry + 12), 1)
+                            pygame.draw.line(self.play_view, crack_col, (rx + 11, ry + 12), (rx + 16, ry + 10), 1)
+                        if hits >= 2:
+                            pygame.draw.line(self.play_view, crack_col, (rx + 10, ry + 5), (rx + 6, ry + 15), 1)
+                            pygame.draw.line(self.play_view, crack_col, (rx + 6, ry + 15), (rx + 14, ry + 17), 1)
 
                     border_col = (18, 14, 20)
                     if y > 0 and self.level.grid[y - 1][x] == EMPTY:

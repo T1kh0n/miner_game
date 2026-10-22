@@ -1,6 +1,6 @@
 import random
 from collections import deque
-from core.config import GRID_W, GRID_H, TILE_SIZE, EMPTY, WALL, DIRT, ROCK, COIN, STONE
+from core.config import GRID_W, GRID_H, TILE_SIZE, EMPTY, WALL, DIRT, ROCK, COIN, STONE, SHALE
 
 MAX_JUMP_TILES_VERTICAL = 2
 MAX_JUMP_TILES_HORIZONTAL = 3
@@ -120,8 +120,11 @@ class Level:
         for y in range(10, self.h - 2):
             for x in range(1, self.w - 1):
                 if visited[y][x] and self.grid[y][x] == DIRT and (x, y) not in spine_set:
-                    if random.random() < 0.22:
+                    rnd = random.random()
+                    if rnd < 0.18:
                         self.grid[y][x] = STONE
+                    elif rnd < 0.30:
+                        self.grid[y][x] = SHALE
 
         self.ensure_guaranteed_passability(spawn_grass_x, center_x)
 
@@ -187,7 +190,7 @@ class Level:
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nx, ny = cx + dx, cy + dy
                 if 0 <= nx < self.w and 3 <= ny < self.h - 1:
-                    if (nx, ny) not in reachable and self.grid[ny][nx] in (EMPTY, DIRT):
+                    if (nx, ny) not in reachable and self.grid[ny][nx] in (EMPTY, DIRT, SHALE):
                         reachable.add((nx, ny))
                         q.append((nx, ny))
         return reachable
