@@ -835,19 +835,61 @@ class Player:
 class DriverCatEntity:
     """Interactive NPC Train Driver Cat present at the metro station platform."""
 
-    def __init__(self, x: float, y: float) -> None:
+    STATE_IDLE = "idle"
+    STATE_WALK = "walk"
+    STATE_TALK = "talk"
+    STATE_ACTION_LANTERN = "action_lantern"
+
+    def __init__(self, x: float, y: float, min_x: float | None = None, max_x: float | None = None) -> None:
         """Initialise Train Driver Cat coordinates and dialogue state."""
         self.x: float = x
         self.y: float = y
+        self.min_x: float = min_x if min_x is not None else x - 24.0
+        self.max_x: float = max_x if max_x is not None else x + 24.0
         self.visible: bool = False
         self.has_spoken: bool = False
         self.facing_right: bool = True
+        self.state: str = self.STATE_IDLE
         self.anim_state: str = "idle"
         self.anim_time: float = 0.0
+        self.speed: float = 25.0
+        self.patrol_timer: float = 0.0
+
+    def set_animation(self, anim_name: str, loop: bool = False) -> None:
+        """Set animation state directly."""
+        self.anim_state = anim_name
+
+    def set_state(self, new_state: str) -> None:
+        """Transition state machine and synchronise animation."""
+        self.state = new_state
+        self.anim_state = new_state
 
     def update(self, dt: float) -> None:
-        """Advance animation timer."""
+        """Advance animation timer and station patrol."""
         self.anim_time += dt
+        if not self.visible:
+            return
+        if self.anim_state == self.STATE_TALK or self.state == self.STATE_TALK:
+            return
+        if self.has_spoken:
+            self.patrol_timer += dt
+            phase = self.patrol_timer % 12.0
+            if phase < 4.0:
+                self.anim_state = self.STATE_WALK
+                if self.facing_right:
+                    self.x += self.speed * dt
+                    if self.x >= self.max_x:
+                        self.x = self.max_x
+                        self.facing_right = False
+                else:
+                    self.x -= self.speed * dt
+                    if self.x <= self.min_x:
+                        self.x = self.min_x
+                        self.facing_right = True
+            elif phase < 8.0:
+                self.anim_state = self.STATE_ACTION_LANTERN
+            else:
+                self.anim_state = self.STATE_IDLE
 
     def render(self, surface: pygame.Surface, cam_x: float, cam_y: float, asset_mgr: AssetManager) -> None:
         """Draw the Train Driver Cat sprite if currently visible."""
@@ -932,6 +974,10 @@ class FeralCatEntity:
     """Hostile agile mutated feline stalking the deep tunnels below the barricade."""
 
     STATE_STALK = "stalk"
+    STATE_RUN = "run"
+    STATE_POUNCE = "pounce"
+    STATE_SLASH = "action_slash"
+    STATE_TALK = "talk"
     STATE_STUNNED = "stunned"
     STATE_HURT = "hurt"
     STATE_DEFEATED = "defeated"
@@ -949,6 +995,22 @@ class FeralCatEntity:
         self.is_defeated: bool = False
         self.light_exposure_time: float = 0.0
         self.anim_time: float = 0.0
+        self.speed: float = 40.0
+        self.in_dialogue: bool = False
+
+    def set_animation(self, anim_name: str, loop: bool = False) -> None:
+        """Set animation state directly."""
+        self.anim_state = anim_name
+
+    def set_state(self, new_state: str) -> None:
+        """Transition combat FSM state."""
+        self.state = new_state
+        if new_state in ("idle", "run", "pounce", "action_slash", "talk", "hurt"):
+            self.anim_state = new_state
+        elif new_state in (self.STATE_STUNNED, self.STATE_HURT, self.STATE_DEFEATED):
+            self.anim_state = "hurt"
+        elif new_state == self.STATE_STALK:
+            self.anim_state = "idle"
 
     def update(
         self,
@@ -979,6 +1041,34 @@ class FeralCatEntity:
         elif self.state == self.STATE_HURT and not self.is_defeated:
             if self.invulnerable_timer <= 0.0:
                 self.state = self.STATE_STALK
+                self.anim_state = "idle"
+
+        if self.is_defeated or self.state in (self.STATE_STUNNED, self.STATE_HURT, self.STATE_DEFEATED):
+            return
+
+        if self.in_dialogue or self.anim_state == "talk":
+            return
+
+        if target_x != 0.0 or target_y != 0.0:
+            dx = target_x - self.x
+            dy = target_y - self.y
+            dist = math.hypot(dx, dy)
+            if dist < 25.0:
+                self.anim_state = "action_slash"
+                self.facing_right = dx > 0
+            elif dist < 65.0:
+                self.anim_state = "pounce"
+                self.facing_right = dx > 0
+                step = self.speed * 1.5 * dt
+                if abs(dx) > 0.5:
+                    self.x += math.copysign(min(step, abs(dx)), dx)
+            elif dist < 250.0:
+                self.anim_state = "run"
+                self.facing_right = dx > 0
+                step = self.speed * dt
+                if abs(dx) > 0.5:
+                    self.x += math.copysign(min(step, abs(dx)), dx)
+            else:
                 self.anim_state = "idle"
 
     def take_damage(self, amount: int, knockback_dir: float = 1.0) -> bool:

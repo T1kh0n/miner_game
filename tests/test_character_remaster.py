@@ -221,3 +221,47 @@ def test_standard_matrix_keys_available_on_all_characters():
             assert s is not None
             assert s.get_width() > 0
             assert s.get_height() > 0
+
+def test_npc_animation_states_reachable_at_runtime():
+    from engine.entities import DriverCatEntity, SoldierCatEntity, FeralCatEntity
+    driver = DriverCatEntity(100.0, 200.0, 80.0, 120.0)
+    assert driver.anim_state == "idle"
+    driver.visible = True
+    driver.has_spoken = True
+    driver.patrol_timer = 1.0
+    driver.update(0.016)
+    assert driver.anim_state == "walk"
+    driver.patrol_timer = 5.0
+    driver.update(0.016)
+    assert driver.anim_state == "action_lantern"
+    driver.patrol_timer = 9.0
+    driver.update(0.016)
+    assert driver.anim_state == "idle"
+    driver.anim_state = "talk"
+    driver.update(0.016)
+    assert driver.anim_state == "talk"
+
+    soldier = SoldierCatEntity(100.0, 500.0, 80.0, 120.0)
+    soldier.set_state(SoldierCatEntity.STATE_DIALOGUE)
+    assert soldier.anim_state == "talk"
+    soldier.set_state(SoldierCatEntity.STATE_PATROL)
+    assert soldier.anim_state == "walk"
+
+    feral = FeralCatEntity(200.0, 300.0)
+    assert feral.anim_state == "idle"
+    feral.anim_state = "talk"
+    assert feral.anim_state == "talk"
+    feral.anim_state = "idle"
+
+    feral.update(0.016, 210.0, 300.0)
+    assert feral.anim_state == "action_slash"
+
+    feral.update(0.016, 240.0, 300.0)
+    assert feral.anim_state == "pounce"
+
+    feral.update(0.016, 320.0, 300.0)
+    assert feral.anim_state == "run"
+
+    feral.take_damage(1, 1.0)
+    assert feral.anim_state == "hurt"
+

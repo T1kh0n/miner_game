@@ -336,6 +336,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - `FeralCatEntity`: `anim_state` only toggles between `"idle"` and `"hurt"`. Its `run_0..3`, `pounce_0..3`, `action_slash_0..3`, and `talk_0..3` frames are never executed in runtime code.
 - **Severity**: High
 - **Location**: `engine/entities.py` (lines 750–880), `states/play_state.py` (lines 790–850).
+- **Status**: Resolved
 
 #### Issue 3.4: Algorithmic Scaling Substituted for Jump and Land Sprite Poses
 - **Expected**: Player jump stretch and landing squash feature distinct feline poses with ear and paw positioning.

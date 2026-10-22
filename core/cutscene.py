@@ -205,6 +205,17 @@ class ShowDialogue(CutsceneAction):
     def start(self, context: dict[str, Any]) -> None:
         """Open dialogue box with line."""
         super().start(context)
+        entities = context.get("entities", {})
+        entity = entities.get(self.speaker_id) if isinstance(entities, dict) else None
+        if entity is not None:
+            if hasattr(entity, "set_state") and hasattr(entity, "STATE_DIALOGUE"):
+                entity.set_state(getattr(entity, "STATE_DIALOGUE"))
+            elif hasattr(entity, "set_animation"):
+                entity.set_animation("talk")
+            elif hasattr(entity, "anim_state"):
+                entity.anim_state = "talk"
+            if hasattr(entity, "in_dialogue"):
+                entity.in_dialogue = True
         dbox = context.get("dialogue_box")
         if dbox is not None and hasattr(dbox, "show_message"):
             dbox.show_message(
@@ -226,6 +237,17 @@ class ShowDialogue(CutsceneAction):
     def finish(self, context: dict[str, Any]) -> None:
         """Close dialogue box if still open."""
         super().finish(context)
+        entities = context.get("entities", {})
+        entity = entities.get(self.speaker_id) if isinstance(entities, dict) else None
+        if entity is not None:
+            if hasattr(entity, "in_dialogue"):
+                entity.in_dialogue = False
+            if hasattr(entity, "STATE_PATROL") and getattr(entity, "state", "") == getattr(entity, "STATE_DIALOGUE", ""):
+                entity.set_state(getattr(entity, "STATE_PATROL"))
+            elif hasattr(entity, "STATE_ACTION_LANTERN") and self.speaker_id == "driver":
+                entity.set_state(getattr(entity, "STATE_ACTION_LANTERN"))
+            elif hasattr(entity, "STATE_STALK") and self.speaker_id == "feral":
+                entity.set_state(getattr(entity, "STATE_STALK"))
         dbox = context.get("dialogue_box")
         if dbox is not None and hasattr(dbox, "close"):
             dbox.close()

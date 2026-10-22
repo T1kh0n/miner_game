@@ -806,8 +806,17 @@ class PlayState(State):
         if self.dialogue_box.is_open:
             self.dialogue_box.update(dt)
             self.player.in_dialogue = True
+            if self.driver_cat is not None and self.dialogue_box.speaker_id == "driver":
+                self.driver_cat.anim_state = "talk"
+            if self.soldier_cat is not None and self.dialogue_box.speaker_id == "soldier":
+                self.soldier_cat.set_state(SoldierCatEntity.STATE_DIALOGUE)
+            if self.feral_cat is not None and self.dialogue_box.speaker_id == "feral":
+                self.feral_cat.anim_state = "talk"
+                self.feral_cat.in_dialogue = True
         else:
             self.player.in_dialogue = False
+            if self.feral_cat is not None and self.feral_cat.in_dialogue:
+                self.feral_cat.in_dialogue = False
         self.emote_mgr.update(dt)
 
         if self.driver_cat is not None:
@@ -855,8 +864,11 @@ class PlayState(State):
                 self.train_x = float(2 * TILE_SIZE)
                 self.driver_cat.visible = True
                 self.driver_cat.has_spoken = True
+                self.driver_cat.anim_state = "action_lantern"
                 self.player.ropes = 6
                 self._audio.play("train_brake")
+            self.driver_cat.visible = True
+            self.driver_cat.anim_state = "walk"
             actions = [
                 Wait(0.2),
                 ShowDialogue("driver", "Train Driver", "driver_greeting", "Greetings, traveler of the underground!", portrait_key="cat_driver"),
@@ -873,6 +885,7 @@ class PlayState(State):
         if not self.soldier_cutscene_triggered and self.soldier_cat is not None:
             if math.hypot(self.player.body.position.x - self.soldier_cat.x, self.player.body.position.y - self.soldier_cat.y) < 45.0:
                 self.soldier_cutscene_triggered = True
+                self.soldier_cat.set_state(SoldierCatEntity.STATE_DIALOGUE)
                 def _on_soldier_done() -> None:
                     if self.soldier_cat is not None:
                         self.soldier_cat.set_state(SoldierCatEntity.STATE_PATROL)
@@ -894,6 +907,12 @@ class PlayState(State):
                 self.feral_cutscene_triggered = True
                 if self.soldier_cat is not None:
                     self.soldier_cat.set_state(SoldierCatEntity.STATE_PINNED_DOWN)
+                self.feral_cat.anim_state = "talk"
+                self.feral_cat.in_dialogue = True
+                def _on_feral_cutscene_done() -> None:
+                    if self.feral_cat is not None:
+                        self.feral_cat.in_dialogue = False
+                        self.feral_cat.anim_state = "idle"
                 actions = [
                     Wait(0.2),
                     ShowDialogue("feral", "Feral Cat", "feral_screech", "Hsss! My feral territory!", portrait_key="cat_feral"),
@@ -905,7 +924,7 @@ class PlayState(State):
                     "emote_manager": self.emote_mgr,
                     "event_bus": self._events,
                 }
-                self.cutscene_mgr.start_cutscene(actions, ctx)
+                self.cutscene_mgr.start_cutscene(actions, ctx, on_complete=_on_feral_cutscene_done)
 
         if self.victory_gem_pos is not None and not self.victory_gem_collected:
             if math.hypot(self.player.body.position.x - self.victory_gem_pos[0], self.player.body.position.y - self.victory_gem_pos[1]) < 30.0:
