@@ -58,3 +58,19 @@ def test_memory_profile_below_target() -> None:
 
     peak_mb = peak / (1024 * 1024)
     assert peak_mb < 80.0
+
+
+def test_darkness_cone_surfaces_zero_allocation() -> None:
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+    sm = StateMachine()
+    ps = PlayState(sm)
+    ps.enter()
+
+    s1 = ps._build_smooth_cone_mask(320, 180, 100, 100, 0.0)
+    s2 = ps._build_smooth_cone_mask(320, 180, 100, 100, 0.0)
+    assert s1 is s2
+
+    c1 = ps._build_cone_mask(320, 180, 100, 100, 0.0, 0.0)
+    c2 = ps._build_cone_mask(320, 180, 100, 100, 0.0, 0.0)
+    assert c1 is c2

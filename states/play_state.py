@@ -124,6 +124,8 @@ class PlayState(State):
 
         self.play_view = pygame.Surface((CANVAS_W, CANVAS_H))
         self.darkness_layer = pygame.Surface((CANVAS_W, CANVAS_H), pygame.SRCALPHA)
+        self._smooth_cone_surf = pygame.Surface((CANVAS_W, CANVAS_H), pygame.SRCALPHA)
+        self._cone_mask_surf = pygame.Surface((CANVAS_W, CANVAS_H), pygame.SRCALPHA)
 
         self.camera = Camera(self.world_w, self.world_h)
         self.save_manager = SaveManager()
@@ -1267,7 +1269,9 @@ class PlayState(State):
         angle_rad: float,
     ) -> pygame.Surface:
         """Build smooth multi-layer warm flashlight cone with soft falloff."""
-        cone_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
+        if not hasattr(self, "_smooth_cone_surf") or self._smooth_cone_surf.get_size() != (view_w, view_h):
+            self._smooth_cone_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
+        cone_surf = self._smooth_cone_surf
         cone_surf.fill((0, 0, 0, 0))
 
         layers = [
@@ -1316,7 +1320,9 @@ class PlayState(State):
                 py + int(math.sin(a) * beam_length),
             ))
 
-        cone_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
+        if not hasattr(self, "_cone_mask_surf") or self._cone_mask_surf.get_size() != (view_w, view_h):
+            self._cone_mask_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
+        cone_surf = self._cone_mask_surf
         cone_surf.fill((0, 0, 0, 0))
         if len(cone_pts) >= 3:
             pygame.draw.polygon(cone_surf, (0, 0, 0, 180), cone_pts)

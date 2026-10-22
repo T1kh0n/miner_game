@@ -380,6 +380,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: In `PlayState._render_darkness_layer()`, `self._build_smooth_cone_mask()` and `self._build_cone_mask()` allocate new `pygame.Surface((view_w, view_h), pygame.SRCALPHA)` instances on every single frame. At 60 FPS, this generates 60 full-screen RGBA surface allocations per second, triggering repetitive garbage collection and potential frame time stutters.
 - **Severity**: Medium
 - **Location**: `states/play_state.py` (lines 1160–1250).
+- **Status**: Resolved
 
 #### Issue 5.2: Per-Frame Font Surface Regeneration and Smoothscaling
 - **Expected**: Responsive UI with cached text surfaces.
