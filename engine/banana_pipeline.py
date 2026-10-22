@@ -235,12 +235,13 @@ def process_cat_miner(
         arr[2:8, 14:22, 3] = np.maximum(arr[2:8, 14:22, 3], glow_alpha)
         frames_dict[f"afk_{3 + i}"] = Image.fromarray(arr)
 
-    # Palette enhancement for idle_0 features
-    arr_0 = np.array(frames_dict["idle_0"])
-    arr_0[4:8, 14:22, :3] = [230, 185, 40]
-    arr_0[4:7, 21:24, :3] = [255, 245, 170]
-    arr_0[16:22, 15:21, :3] = [85, 105, 55]
-    frames_dict["idle_0"] = Image.fromarray(arr_0)
+    for i in range(4):
+        y_off = 1 if i in (1, 2) else 0
+        arr_i = np.array(frames_dict[f"idle_{i}"])
+        arr_i[4 + y_off:8 + y_off, 14:22, :3] = [230, 185, 40]
+        arr_i[4 + y_off:7 + y_off, 21:24, :3] = [255, 245, 170]
+        arr_i[16 + y_off:22 + y_off, 15:21, :3] = [85, 105, 55]
+        frames_dict[f"idle_{i}"] = Image.fromarray(arr_i)
 
     ordered_keys = [
         "idle_0", "idle_1", "idle_2", "idle_3",
@@ -378,11 +379,12 @@ def process_cat_driver(
             y_shift=(-1 if i % 2 == 1 else 0),
         )
 
-    # Feature enhancement for driver
-    arr_0 = np.array(frames_dict["idle_0"])
-    arr_0[5:8, 15:18, :3] = [245, 210, 45]
-    arr_0[8:12, 10:13, :3] = [185, 175, 165]
-    frames_dict["idle_0"] = Image.fromarray(arr_0)
+    for i in range(4):
+        y_off = 1 if i in (1, 2) else 0
+        arr_i = np.array(frames_dict[f"idle_{i}"])
+        arr_i[5 + y_off:8 + y_off, 15:18, :3] = [245, 210, 45]
+        arr_i[8 + y_off:12 + y_off, 10:13, :3] = [185, 175, 165]
+        frames_dict[f"idle_{i}"] = Image.fromarray(arr_i)
 
     arr_act = np.array(frames_dict["action_lantern_2"])
     arr_act[12:18, 20:26, :3] = [255, 235, 130]
@@ -509,11 +511,12 @@ def process_cat_soldier(
             fw, fh, y_shift=2,
         )
 
-    # Feature enhancement for soldier
-    arr_0 = np.array(frames_dict["idle_0"])
-    arr_0[4:10, 14:22, :3] = [60, 145, 55]
-    arr_0[10:12, 14:22, :3] = [230, 60, 75]
-    frames_dict["idle_0"] = Image.fromarray(arr_0)
+    for i in range(4):
+        y_off = 1 if i in (1, 2) else 0
+        arr_i = np.array(frames_dict[f"idle_{i}"])
+        arr_i[4 + y_off:10 + y_off, 14:22, :3] = [60, 145, 55]
+        arr_i[10 + y_off:12 + y_off, 14:22, :3] = [230, 60, 75]
+        frames_dict[f"idle_{i}"] = Image.fromarray(arr_i)
 
     arr_act = np.array(frames_dict["action_shovel_1"])
     arr_act[14:20, 24:30, :3] = [195, 205, 220]

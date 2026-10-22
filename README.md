@@ -275,6 +275,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
   - `cat_soldier.png`: Watermelon rind helmet green (`[60, 145, 55]`) and red rind stripe (`[230, 60, 75]`) are painted onto `idle_0` only (lines 489–493).
 - **Severity**: High
 - **Location**: `assets/spritesheets/cat_miner.png`, `cat_driver.png`, `cat_soldier.png`, `engine/banana_pipeline.py` (lines 222–227, 356–360, 489–493).
+- **Status**: Resolved
 
 #### Issue 2.3: Artificial Semi-Transparent Alpha Contamination in Pixel Art
 - **Expected**: All character spritesheets adhere to strict 1-bit alpha or clean outlines (`(22, 18, 24)`) without anti-aliasing blur.

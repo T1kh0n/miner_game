@@ -131,3 +131,21 @@ def test_feral_cat_remaster_features() -> None:
 
     right_eye_mask = (arr[:, :, 0] < 70) & (arr[:, :, 1] > 120) & (arr[:, :, 2] > 230)
     assert np.any(right_eye_mask), "Feral Cat must feature blue heterochromia right eye"
+
+
+def test_idle_animation_palette_consistency_across_frames():
+    am = AssetManager.get()
+    for i in range(4):
+        idle_miner = am.get_sprite(f"cat_{CAT_MINER_ID}", f"idle_{i}")
+        arr_m = pygame.surfarray.pixels3d(idle_miner)
+        assert np.any((arr_m[:, :, 0] > 200) & (arr_m[:, :, 1] > 160) & (arr_m[:, :, 2] < 60))
+        assert np.any((arr_m[:, :, 0] > 70) & (arr_m[:, :, 0] < 110) & (arr_m[:, :, 1] > 90) & (arr_m[:, :, 1] < 130) & (arr_m[:, :, 2] < 75))
+
+        idle_driver = am.get_sprite("cat_driver", f"idle_{i}")
+        arr_d = pygame.surfarray.pixels3d(idle_driver)
+        assert np.any((arr_d[:, :, 0] > 230) & (arr_d[:, :, 1] > 195) & (arr_d[:, :, 2] < 90))
+
+        idle_soldier = am.get_sprite("cat_soldier", f"idle_{i}")
+        arr_s = pygame.surfarray.pixels3d(idle_soldier)
+        assert np.any((arr_s[:, :, 0] > 35) & (arr_s[:, :, 0] < 80) & (arr_s[:, :, 1] > 120) & (arr_s[:, :, 1] < 170) & (arr_s[:, :, 2] < 85))
+        assert np.any((arr_s[:, :, 0] > 210) & (arr_s[:, :, 1] < 80) & (arr_s[:, :, 2] < 95))
