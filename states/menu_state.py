@@ -27,28 +27,31 @@ class MenuState(State):
         self.cat_anim_timer = 0.0
 
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
-        self.panel = UIPanel(0.5, 0.52, 172, 160, border_color=(75, 82, 98), bg_color=(18, 22, 28))
+        self.panel = UIPanel(0.5, 0.52, 172, 174, border_color=(75, 82, 98), bg_color=(18, 22, 28))
         self.root.add_child(self.panel)
 
-        self.title_lbl = UILabel(0.5, 0.08, self.loc.get_text("menu_title", "MINER DIGGER"), self.font_large, COLOR_GOLD)
+        self.title_lbl = UILabel(0.5, 0.07, self.loc.get_text("menu_title", "MINER DIGGER"), self.font_large, COLOR_GOLD)
         self.panel.add_child(self.title_lbl)
 
-        self.btn_continue = UIButton(0.5, 0.23, 140, 17, self.loc.get_text("menu_continue", "CONTINUE"), self.font_med, self._continue_game)
+        self.btn_continue = UIButton(0.5, 0.20, 140, 16, self.loc.get_text("menu_continue", "CONTINUE"), self.font_med, self._continue_game)
         self.panel.add_child(self.btn_continue)
 
-        self.btn_play = UIButton(0.5, 0.38, 140, 17, self.loc.get_text("menu_play", "PLAY"), self.font_med, self._new_game)
+        self.btn_play = UIButton(0.5, 0.33, 140, 16, self.loc.get_text("menu_play", "PLAY"), self.font_med, self._new_game)
         self.panel.add_child(self.btn_play)
 
-        self.btn_skin = UIButton(0.5, 0.53, 140, 17, self.loc.get_text("menu_skins", "SKINS"), self.font_med, lambda: self.manager.change("skin"))
+        self.btn_skin = UIButton(0.5, 0.46, 140, 16, self.loc.get_text("menu_skins", "SKINS"), self.font_med, lambda: self.manager.change("skin"))
         self.panel.add_child(self.btn_skin)
 
-        self.btn_lead = UIButton(0.5, 0.68, 140, 17, self.loc.get_text("menu_leaderboard", "LEADERBOARD"), self.font_med, lambda: self.manager.change("leaderboard"))
+        self.btn_lead = UIButton(0.5, 0.59, 140, 16, self.loc.get_text("menu_leaderboard", "LEADERBOARD"), self.font_med, lambda: self.manager.change("leaderboard"))
         self.panel.add_child(self.btn_lead)
 
-        self.btn_lang = UIButton(0.5, 0.82, 140, 17, self.loc.get_text("ui_lang", "LANG: EN"), self.font_small, self._toggle_lang)
+        self.btn_settings = UIButton(0.5, 0.72, 140, 16, self.loc.get_text("menu_settings", "SETTINGS"), self.font_med, lambda: self.manager.change("settings"))
+        self.panel.add_child(self.btn_settings)
+
+        self.btn_lang = UIButton(0.5, 0.84, 140, 15, self.loc.get_text("ui_lang", "LANG: EN"), self.font_small, self._toggle_lang)
         self.panel.add_child(self.btn_lang)
 
-        self.btn_quit = UIButton(0.5, 0.94, 140, 17, self.loc.get_text("menu_quit", "QUIT"), self.font_small, self._quit)
+        self.btn_quit = UIButton(0.5, 0.94, 140, 15, self.loc.get_text("menu_quit", "QUIT"), self.font_small, self._quit)
         self.panel.add_child(self.btn_quit)
 
         self.bg_surf = self._create_metro_skyline()
@@ -116,6 +119,7 @@ class MenuState(State):
         self.btn_play.set_text(self.loc.get_text("menu_play", "PLAY"))
         self.btn_skin.set_text(self.loc.get_text("menu_skins", "SKINS"))
         self.btn_lead.set_text(self.loc.get_text("menu_leaderboard", "LEADERBOARD"))
+        self.btn_settings.set_text(self.loc.get_text("menu_settings", "SETTINGS"))
         self.btn_lang.set_text(self.loc.get_text("ui_lang", "LANG: EN"))
         self.btn_quit.set_text(self.loc.get_text("menu_quit", "QUIT"))
 

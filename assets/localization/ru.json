@@ -45,5 +45,11 @@
   "hint_tool_pickaxe": "Инструмент: Кирка",
   "hud_hook": "КРЮК",
   "hud_rope": "[Веревка]",
-  "hud_pickaxe": "[Кирка]"
+  "hud_pickaxe": "[Кирка]",
+  "settings_master": "ОБЩАЯ ГРОМКОСТЬ",
+  "settings_music": "ГРОМКОСТЬ МУЗЫКИ",
+  "settings_sfx": "ГРОМКОСТЬ ЭФФЕКТОВ",
+  "settings_fullscreen": "ПОЛНЫЙ ЭКРАН",
+  "settings_on": "ВКЛ",
+  "settings_off": "ВЫКЛ"
 }

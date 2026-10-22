@@ -384,6 +384,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: There is no Settings button in `MenuState` and no `SettingsState` exists in the finite state machine. Sound volumes and display mode cannot be configured by the user via the UI.
 - **Severity**: Medium
 - **Location**: `states/menu_state.py`, `states/state_machine.py`, `core/save_system.py`.
+- **Status**: Resolved
 
 ---
 

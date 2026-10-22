@@ -192,6 +192,8 @@ class AudioManager:
         self._available: bool = False
         self._sounds: dict[str, object] = {}
         self._master_volume: float = 1.0
+        self._music_volume: float = 0.8
+        self._sfx_volume: float = 0.8
         self._ambient_channel: object = None
 
     @classmethod
@@ -261,7 +263,7 @@ class AudioManager:
         if sound is None:
             return
         try:
-            sound.set_volume(volume * self._master_volume)
+            sound.set_volume(volume * self._sfx_volume * self._master_volume)
             sound.play()
         except Exception:
             pass
@@ -308,6 +310,36 @@ class AudioManager:
             vol: New master volume in [0.0, 1.0].
         """
         self._master_volume = max(0.0, min(1.0, vol))
+        if self._ambient_channel is not None:
+            try:
+                self._ambient_channel.set_volume(self._music_volume * self._master_volume)
+            except Exception:
+                pass
+
+    def set_music_volume(self, vol: float) -> None:
+        """Set the music volume applied to ambient and background loops."""
+        self._music_volume = max(0.0, min(1.0, vol))
+        if self._ambient_channel is not None:
+            try:
+                self._ambient_channel.set_volume(self._music_volume * self._master_volume)
+            except Exception:
+                pass
+
+    def set_sfx_volume(self, vol: float) -> None:
+        """Set the SFX volume multiplier applied to sound effects."""
+        self._sfx_volume = max(0.0, min(1.0, vol))
+
+    def get_master_volume(self) -> float:
+        """Return current master volume."""
+        return self._master_volume
+
+    def get_music_volume(self) -> float:
+        """Return current music volume."""
+        return self._music_volume
+
+    def get_sfx_volume(self) -> float:
+        """Return current SFX volume."""
+        return self._sfx_volume
 
     def is_available(self) -> bool:
         """Return True if the pygame mixer was successfully initialised."""

@@ -45,5 +45,11 @@
   "hint_tool_pickaxe": "Tool: Mining Pickaxe",
   "hud_hook": "HOOK",
   "hud_rope": "[Rope]",
-  "hud_pickaxe": "[Pickaxe]"
+  "hud_pickaxe": "[Pickaxe]",
+  "settings_master": "MASTER VOLUME",
+  "settings_music": "MUSIC VOLUME",
+  "settings_sfx": "SFX VOLUME",
+  "settings_fullscreen": "FULLSCREEN",
+  "settings_on": "ON",
+  "settings_off": "OFF"
 }

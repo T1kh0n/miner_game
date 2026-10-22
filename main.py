@@ -8,6 +8,7 @@ from states.menu_state import MenuState
 from states.play_state import PlayState
 from states.skin_state import SkinState
 from states.leaderboard_state import LeaderboardState
+from states.settings_state import SettingsState
 
 
 class MinerApp:
@@ -43,8 +44,10 @@ class MinerApp:
 
         self.state_machine.add_state("menu", MenuState(self.state_machine))
         self.state_machine.add_state("play", PlayState(self.state_machine))
+        self.state_machine.app = self
         self.state_machine.add_state("skin", SkinState(self.state_machine))
         self.state_machine.add_state("leaderboard", LeaderboardState(self.state_machine))
+        self.state_machine.add_state("settings", SettingsState(self.state_machine))
         self.state_machine.change("menu")
 
     def toggle_fullscreen(self) -> None:
