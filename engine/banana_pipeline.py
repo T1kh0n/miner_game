@@ -71,7 +71,9 @@ def normalize_frame(
     if copy_w > 0 and copy_h > 0:
         cropped_piece = resized.crop((src_x1, src_y1, src_x1 + copy_w, src_y1 + copy_h))
         out.paste(cropped_piece, (dst_x1, dst_y1), cropped_piece)
-    return out
+    out_arr = np.array(out)
+    out_arr[out_arr[:, :, 3] > 0, 3] = 255
+    return Image.fromarray(out_arr)
 
 
 def process_cat_miner(
@@ -228,11 +230,11 @@ def process_cat_miner(
             CAT_FRAME_W, CAT_FRAME_H,
         )
         arr = np.array(base_afk)
-        glow_alpha = 140 + i * 40
-        arr[2:8, 14:22, 0] = np.clip(arr[2:8, 14:22, 0].astype(int) + 60, 0, 255)
-        arr[2:8, 14:22, 1] = np.clip(arr[2:8, 14:22, 1].astype(int) + 60, 0, 255)
-        arr[2:8, 14:22, 2] = np.clip(arr[2:8, 14:22, 2].astype(int) + 40, 0, 255)
-        arr[2:8, 14:22, 3] = np.maximum(arr[2:8, 14:22, 3], glow_alpha)
+        solid = arr[2:8, 14:22, 3] > 0
+        arr[2:8, 14:22, 0] = np.where(solid, np.clip(arr[2:8, 14:22, 0].astype(int) + 60 + i * 20, 0, 255), arr[2:8, 14:22, 0])
+        arr[2:8, 14:22, 1] = np.where(solid, np.clip(arr[2:8, 14:22, 1].astype(int) + 60 + i * 20, 0, 255), arr[2:8, 14:22, 1])
+        arr[2:8, 14:22, 2] = np.where(solid, np.clip(arr[2:8, 14:22, 2].astype(int) + 40 + i * 15, 0, 255), arr[2:8, 14:22, 2])
+        arr[arr[:, :, 3] > 0, 3] = 255
         frames_dict[f"afk_{3 + i}"] = Image.fromarray(arr)
 
     for i in range(4):
@@ -521,6 +523,16 @@ def process_cat_soldier(
     arr_act = np.array(frames_dict["action_shovel_1"])
     arr_act[14:20, 24:30, :3] = [195, 205, 220]
     frames_dict["action_shovel_1"] = Image.fromarray(arr_act)
+
+    target_mean_g = 122.0
+    for i in range(4):
+        arr = np.array(frames_dict[f"hurt_{i}"])
+        mask = arr[:, :, 3] > 0
+        if np.any(mask):
+            current_g = np.mean(arr[mask, 1])
+            diff = target_mean_g - current_g
+            arr[mask, 1] = np.clip(arr[mask, 1].astype(float) + diff, 0, 255).astype(np.uint8)
+            frames_dict[f"hurt_{i}"] = Image.fromarray(arr)
 
     ordered_keys = [
         "idle_0", "idle_1", "idle_2", "idle_3",

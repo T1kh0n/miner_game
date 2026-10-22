@@ -149,3 +149,23 @@ def test_idle_animation_palette_consistency_across_frames():
         arr_s = pygame.surfarray.pixels3d(idle_soldier)
         assert np.any((arr_s[:, :, 0] > 35) & (arr_s[:, :, 0] < 80) & (arr_s[:, :, 1] > 120) & (arr_s[:, :, 1] < 170) & (arr_s[:, :, 2] < 85))
         assert np.any((arr_s[:, :, 0] > 210) & (arr_s[:, :, 1] < 80) & (arr_s[:, :, 2] < 95))
+
+
+def test_alpha_contamination_and_color_drift():
+    from PIL import Image
+    miner_img = Image.open(f"assets/spritesheets/cat_{CAT_MINER_ID}.png")
+    m_arr = np.array(miner_img)
+    semi = (m_arr[:, :, 3] > 0) & (m_arr[:, :, 3] < 255)
+    assert np.sum(semi) == 0
+
+    soldier_img = Image.open("assets/spritesheets/cat_soldier.png")
+    with open("assets/data/cat_soldier.json", "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    means = []
+    for i in range(4):
+        fmeta = meta["frames"][f"hurt_{i}"]
+        x = fmeta["x"]
+        arr = np.array(soldier_img.crop((x, 0, x + 36, 36)))
+        mask = arr[:, :, 3] > 0
+        means.append(np.mean(arr[mask, 1]))
+    assert np.std(means) < 2.0

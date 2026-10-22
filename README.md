@@ -282,6 +282,7 @@ A systematic Tree of Thoughts quality assurance inspection was conducted across 
 - **Observed**: `cat_miner.png` (and `player_classic.png`) contains 85 semi-transparent pixels across `afk_3`, `afk_4`, and `afk_5` due to `arr[2:8, 14:22, 3] = np.maximum(..., glow_alpha)` in `banana_pipeline.py` (line 217). Additionally, `cat_soldier.png` exhibits a significant RGB color drift in `hurt_0..3` (green channel standard deviation of 12.1 across frames).
 - **Severity**: Medium
 - **Location**: `assets/spritesheets/cat_miner.png`, `cat_soldier.png`, `engine/banana_pipeline.py` (line 217).
+- **Status**: Resolved
 
 #### Issue 2.4: Terrain Tileset Transparent Seams and Incomplete Borders
 - **Expected**: Terrain tiles in `tiles.png` are solid 20x20 pixel blocks that seamlessly tile horizontally and vertically.
