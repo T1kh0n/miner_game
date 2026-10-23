@@ -1,9 +1,21 @@
 [
   {
+    "score": 120,
+    "depth": 29,
+    "skin": "classic",
+    "date": "2026-10-22 23:27"
+  },
+  {
     "score": 30,
     "depth": 31,
     "skin": "classic",
     "date": "2026-10-09 20:02"
+  },
+  {
+    "score": 20,
+    "depth": 34,
+    "skin": "classic",
+    "date": "2026-10-22 23:26"
   },
   {
     "score": 10,
@@ -46,11 +58,5 @@
     "depth": 12,
     "skin": "classic",
     "date": "2026-10-09 19:39"
-  },
-  {
-    "score": 0,
-    "depth": 5,
-    "skin": "classic",
-    "date": "2026-10-09 19:37"
   }
 ]
