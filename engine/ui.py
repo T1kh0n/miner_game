@@ -49,32 +49,22 @@ class UILabel(UINode):
         self.font = font
         self.color = color
         self.max_width = max_width
-        self._cached_surf: pygame.Surface | None = None
-        self._cache_key: tuple | None = None
 
     def set_text(self, text: str) -> None:
-        if self.text != text:
-            self.text = text
-            self._cached_surf = None
+        self.text = text
 
     def render(self, surf: pygame.Surface) -> None:
         if not self.visible:
             return
+        ts = self.font.render(str(self.text), True, self.color)
         mw = self.max_width
         if mw is None and self.parent_w > 0:
             mw = self.parent_w - 12
-        cache_key = (str(self.text), self.color, self.font, mw)
-        if self._cached_surf is None or self._cache_key != cache_key:
-            ts = self.font.render(str(self.text), True, self.color)
-            if mw and ts.get_width() > mw and ts.get_width() > 0:
-                scale = mw / ts.get_width()
-                nw = int(ts.get_width() * scale)
-                nh = max(1, int(ts.get_height() * scale))
-                ts = pygame.transform.smoothscale(ts, (nw, nh))
-            self._cached_surf = ts
-            self._cache_key = cache_key
-        else:
-            ts = self._cached_surf
+        if mw and ts.get_width() > mw and ts.get_width() > 0:
+            scale = mw / ts.get_width()
+            nw = int(ts.get_width() * scale)
+            nh = max(1, int(ts.get_height() * scale))
+            ts = pygame.transform.smoothscale(ts, (nw, nh))
         pos = ts.get_rect(center=(self.rect.x, self.rect.y))
         surf.blit(ts, pos)
         super().render(surf)
@@ -87,13 +77,9 @@ class UIButton(UINode):
         self.callback = callback
         self.accent = accent
         self.hovered = False
-        self._cached_surf: pygame.Surface | None = None
-        self._cache_key: tuple | None = None
 
     def set_text(self, text: str) -> None:
-        if self.text != text:
-            self.text = text
-            self._cached_surf = None
+        self.text = text
 
     def update(self, mp: tuple[int, int], clk: bool) -> None:
         if not self.visible:
@@ -111,19 +97,13 @@ class UIButton(UINode):
         pygame.draw.rect(surf, PAL_OUTLINE, self.rect.inflate(4, 4), border_radius=6)
         pygame.draw.rect(surf, bg_col, self.rect, border_radius=4)
         pygame.draw.rect(surf, border_col, self.rect, 1, border_radius=4)
+        ts = self.font.render(self.text, True, COLOR_TEXT)
         mw = self.rect.width - 6
-        cache_key = (str(self.text), self.font, mw)
-        if self._cached_surf is None or self._cache_key != cache_key:
-            ts = self.font.render(self.text, True, COLOR_TEXT)
-            if mw and ts.get_width() > mw and ts.get_width() > 0:
-                scale = mw / ts.get_width()
-                nw = int(ts.get_width() * scale)
-                nh = max(1, int(ts.get_height() * scale))
-                ts = pygame.transform.smoothscale(ts, (nw, nh))
-            self._cached_surf = ts
-            self._cache_key = cache_key
-        else:
-            ts = self._cached_surf
+        if ts.get_width() > mw and ts.get_width() > 0:
+            scale = mw / ts.get_width()
+            nw = int(ts.get_width() * scale)
+            nh = max(1, int(ts.get_height() * scale))
+            ts = pygame.transform.smoothscale(ts, (nw, nh))
         tr = ts.get_rect(center=self.rect.center)
         surf.blit(ts, tr)
         super().render(surf)

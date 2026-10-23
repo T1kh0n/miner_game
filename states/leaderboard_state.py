@@ -12,13 +12,13 @@ class LeaderboardState(State):
         self.font_small = self.loc.get_font(15)
 
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
-        self.panel = UIPanel(0.5, 0.5, 230, 166)
+        self.panel = UIPanel(0.5, 0.5, 230, 200)
         self.root.add_child(self.panel)
 
         self.title_lbl = UILabel(0.5, 0.1, self.loc.get_text("leaderboard_title", "HALL OF FAME"), self.font_large, COLOR_GOLD)
         self.panel.add_child(self.title_lbl)
 
-        self.btn_menu = UIButton(0.5, 0.88, 90, 18, self.loc.get_text("btn_menu", "MENU"), self.font_small, lambda: self.manager.change("menu"))
+        self.btn_menu = UIButton(0.5, 0.9, 90, 20, self.loc.get_text("btn_menu", "MENU"), self.font_small, lambda: self.manager.change("menu"))
         self.panel.add_child(self.btn_menu)
 
         self.root.layout(pygame.Rect(0, 0, CANVAS_W, CANVAS_H))
@@ -41,11 +41,11 @@ class LeaderboardState(State):
         surface.fill((16, 20, 28))
         self.root.render(surface)
         records = self.manager.leaderboard.entries
-        start_y = CANVAS_H // 2 - 46
-        for i, rec in enumerate(records[:5]):
+        start_y = CANVAS_H // 2 - 58
+        for i, rec in enumerate(records[:7]):
             txt = self.font_small.render(f"{i+1}. {rec['skin'][:7]} | {rec['score']}pts | {rec['depth']}m", True, COLOR_TEXT)
             max_w = 200
             if txt.get_width() > max_w:
                 scale = max_w / txt.get_width()
                 txt = pygame.transform.smoothscale(txt, (int(txt.get_width() * scale), int(txt.get_height() * scale)))
-            surface.blit(txt, (CANVAS_W // 2 - txt.get_width() // 2, start_y + i * 16))
+            surface.blit(txt, (CANVAS_W // 2 - txt.get_width() // 2, start_y + i * 18))

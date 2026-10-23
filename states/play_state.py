@@ -6,27 +6,10 @@ from typing import Any, Callable
 from core.config import (
     CANVAS_W, CANVAS_H, PANEL_HEIGHT, TILE_SIZE, GRID_W, GRID_H,
     COLOR_TEXT, COLOR_GOLD, COLOR_DANGER, COLOR_SUCCESS, PAL_OUTLINE,
-    WALL, DIRT, ROCK, COIN, EMPTY, STONE, SHALE, SHALE_MAX_HITS, FIXED_DT, MAX_ACCUMULATOR,
-    FLASHLIGHT_ANGLE, FLASHLIGHT_SELF_GLOW, AFK_KNOCK_SECONDS, AFK_BLIND_SECONDS,
-    CAT_MINER_ID,
+    WALL, DIRT, ROCK, COIN, EMPTY, STONE, FIXED_DT, MAX_ACCUMULATOR
 )
-from core.events import (
-    EventManager,
-    EVT_PLAYER_JUMP, EVT_PLAYER_LAND, EVT_BLOCK_HIT, EVT_BLOCK_BREAK,
-    EVT_ROPE_THROW, EVT_ROPE_ATTACH, EVT_ENTITY_HURT,
-    EVT_CHECKPOINT_SAVE, EVT_AFK_KNOCK, EVT_AFK_BLIND,
-)
-from core.audio import AudioManager
 from engine.level import Level
-from engine.entities import (
-    Player, RockEntity, Particle, ParticlePool, CabinEntity, HookEntity,
-    DriverCatEntity, SoldierCatEntity, FeralCatEntity, BlastDoorEntity
-)
-from core.cutscene import (
-    CutsceneManager, MoveCameraTo, MoveEntityTo, Wait,
-    ShowDialogue, TriggerEvent, ShowEmote, PlayAnimation
-)
-from engine.dialogue import DialogueBox, EmoteManager
+from engine.entities import Player, RockEntity, Particle, ParticlePool, CabinEntity
 from engine.asset_manager import AssetManager
 from engine.ui import UIButton, UILabel, UIPanel, UINode
 from core.camera import Camera
@@ -37,12 +20,8 @@ from core.save_system import (
 )
 from states.state_machine import State
 
-
 class TutorialSystem:
-    """Context-sensitive one-time tutorial hint dispatcher."""
-
     def __init__(self, font: pygame.font.Font, loc: LocalizationManager, on_hint_fired: Callable[[str], None] | None = None, initial_seen: set[str] | None = None) -> None:
-        """Initialise with font, localization manager, and optional callback."""
         self.font = font
         self.loc = loc
         self.hints: list[dict[str, Any]] = []
@@ -51,11 +30,9 @@ class TutorialSystem:
 
     @property
     def fired(self) -> set[str]:
-        """Return the set of hint keys that have already been shown."""
         return self.seen_hints
 
     def fire(self, key: str, default_text: str = "") -> bool:
-        """Show a hint once; subsequent calls with the same key are no-ops."""
         if key in self.seen_hints:
             return False
         self.seen_hints.add(key)
@@ -66,14 +43,12 @@ class TutorialSystem:
         return True
 
     def reset_hints(self) -> None:
-        """Clear seen hints and show a confirmation toast."""
         self.seen_hints.clear()
         self.hints.clear()
         toast = self.loc.get_text("hints_reset_done", "Tutorial hints have been reset.")
         self.hints.append({"key": "reset_toast", "text": toast, "life": 180, "max_life": 180})
 
     def refresh_strings(self) -> None:
-        """Re-fetch localised text for all pending hints after a language switch."""
         for h in self.hints:
             if h["key"] == "reset_toast":
                 h["text"] = self.loc.get_text("hints_reset_done", h["text"])
@@ -81,15 +56,13 @@ class TutorialSystem:
                 h["text"] = self.loc.get_text(f"hint_{h['key']}", h["text"])
 
     def update(self) -> None:
-        """Decrement lifetimes and remove expired hints."""
         for h in self.hints[:]:
             h["life"] -= 1
             if h["life"] <= 0:
                 self.hints.remove(h)
 
     def render(self, surface: pygame.Surface) -> None:
-        """Draw active hint toasts centred near the bottom of the canvas."""
-        y_pos = CANVAS_H - 20
+        y_pos = CANVAS_H - PANEL_HEIGHT - 16
         for h in self.hints:
             alpha = min(255, int(255 * (h["life"] / 30.0))) if h["life"] < 30 else 255
             ts = self.font.render(h["text"], True, (255, 235, 150))
@@ -107,25 +80,21 @@ class TutorialSystem:
             surface.blit(surf_a, (bx + 5, y_pos))
             y_pos -= ts.get_height() + 8
 
-
 class PlayState(State):
-    """Core gameplay state: physics loop, multi-layer rendering, Biome 1 metro cavern, and diegetic HUD."""
-
     def __init__(self, manager) -> None:
-        """Construct the play state and initialise persistent subsystems."""
         super().__init__(manager)
         self.loc = LocalizationManager.get()
         self.font = self.loc.get_font(15)
         self.font_big = self.loc.get_font(20)
-        self.font_dialogue = self.loc.get_font(9)
-        self.font_dialogue_name = self.loc.get_font(11)
         self.world_w = GRID_W * TILE_SIZE
         self.world_h = GRID_H * TILE_SIZE
 
-        self.play_view = pygame.Surface((CANVAS_W, CANVAS_H))
-        self.darkness_layer = pygame.Surface((CANVAS_W, CANVAS_H), pygame.SRCALPHA)
-        self._smooth_cone_surf = pygame.Surface((CANVAS_W, CANVAS_H), pygame.SRCALPHA)
-        self._cone_mask_surf = pygame.Surface((CANVAS_W, CANVAS_H), pygame.SRCALPHA)
+        self.play_view = pygame.Surface((CANVAS_W, CANVAS_H - PANEL_HEIGHT))
+        self.darkness_layer = pygame.Surface((CANVAS_W, CANVAS_H - PANEL_HEIGHT), pygame.SRCALPHA)
+        self.panel_surface = pygame.Surface((CANVAS_W, PANEL_HEIGHT))
+
+        self.light_player = self._make_light_mask(70)
+        self.light_coin = self._make_light_mask(24)
 
         self.camera = Camera(self.world_w, self.world_h)
         self.save_manager = SaveManager()
@@ -140,49 +109,19 @@ class PlayState(State):
         self.particle_pool = ParticlePool(180)
         self.particles = self.particle_pool.particles
         self.cabins: list[CabinEntity] = []
-        self.mouse_canvas_pos: tuple[int, int] = (CANVAS_W // 2, CANVAS_H // 2)
-
-        self._afk_knock_emitted = False
-        self._afk_blind_emitted = False
-        self._afk_blind_alpha = 0.0
-        self._afk_ripples: list[dict] = []
-
-        self._events = EventManager.get()
-        self._audio = AudioManager.get()
-
-        self.cutscene_mgr = CutsceneManager()
-        self.dialogue_box = DialogueBox()
-        self.emote_mgr = EmoteManager()
-        self.block_hits: dict[tuple[int, int], int] = {}
-        self.metro_cutscene_triggered: bool = False
-        self.train_x: float = -200.0
-        self.driver_cat = DriverCatEntity(2.0 * TILE_SIZE + 40.0, 9.0 * TILE_SIZE)
-        self.soldier_cutscene_triggered: bool = False
-        self.soldier_cat = SoldierCatEntity(15.0 * TILE_SIZE, 24.0 * TILE_SIZE, 12.0 * TILE_SIZE, 20.0 * TILE_SIZE)
-        self.feral_cutscene_triggered: bool = False
-        self.feral_cat = FeralCatEntity(22.0 * TILE_SIZE, 28.0 * TILE_SIZE)
-        self.blast_door: BlastDoorEntity | None = None
-        self.blast_door_opened: bool = False
-        self.feral_defeated: bool = False
-        self.victory_gem_pos: tuple[float, float] | None = None
-        self.victory_gem_collected: bool = False
-
         self._setup_end_panels()
         self.loc.subscribe(self._refresh_strings)
 
     def _setup_end_panels(self) -> None:
-        """Build all overlay UI panels (death, win, pause)."""
         canvas_rect = pygame.Rect(0, 0, CANVAS_W, CANVAS_H)
         self.root = UINode(0.5, 0.5, 1.0, 1.0)
 
-        self.panel_over = UIPanel(0.5, 0.5, 210, 84, border_color=COLOR_DANGER)
+        self.panel_over = UIPanel(0.5, 0.5, 190, 84, border_color=COLOR_DANGER)
         self.death_label = UILabel(0.5, 0.28, self.loc.get_text("death_cave_in", "CAVE-IN COLLAPSE"), self.font_big, COLOR_DANGER)
         self.panel_over.add_child(self.death_label)
-        self.btn_over_checkpoint = UIButton(0.20, 0.75, 66, 18, self.loc.get_text("btn_checkpoint", "CHECKPOINT"), self.font, self.respawn_at_checkpoint)
-        self.panel_over.add_child(self.btn_over_checkpoint)
-        self.btn_over_restart = UIButton(0.53, 0.75, 54, 18, self.loc.get_text("btn_restart", "RESTART"), self.font, self._full_restart)
+        self.btn_over_restart = UIButton(0.25, 0.75, 68, 20, self.loc.get_text("btn_restart", "RESTART"), self.font, self.respawn_at_checkpoint)
         self.panel_over.add_child(self.btn_over_restart)
-        self.btn_over_menu = UIButton(0.82, 0.75, 48, 18, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
+        self.btn_over_menu = UIButton(0.75, 0.75, 68, 20, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
         self.panel_over.add_child(self.btn_over_menu)
         self.panel_over.visible = False
         self.root.add_child(self.panel_over)
@@ -197,20 +136,18 @@ class PlayState(State):
         self.panel_won.visible = False
         self.root.add_child(self.panel_won)
 
-        self.panel_pause = UIPanel(0.5, 0.5, 190, 144, border_color=(100, 150, 255))
-        self.lbl_pause = UILabel(0.5, 0.10, self.loc.get_text("pause_title", "PAUSED"), self.font_big, (100, 150, 255))
+        self.panel_pause = UIPanel(0.5, 0.5, 190, 134, border_color=(100, 150, 255))
+        self.lbl_pause = UILabel(0.5, 0.12, self.loc.get_text("pause_title", "PAUSED"), self.font_big, (100, 150, 255))
         self.panel_pause.add_child(self.lbl_pause)
-        self.btn_pause_resume = UIButton(0.5, 0.25, 140, 18, self.loc.get_text("btn_resume", "RESUME"), self.font, self._unpause)
+        self.btn_pause_resume = UIButton(0.5, 0.32, 140, 20, self.loc.get_text("btn_resume", "RESUME"), self.font, self._unpause)
         self.panel_pause.add_child(self.btn_pause_resume)
-        self.btn_pause_checkpoint = UIButton(0.5, 0.41, 140, 18, self.loc.get_text("btn_checkpoint", "CHECKPOINT"), self.font, self.respawn_at_checkpoint)
-        self.panel_pause.add_child(self.btn_pause_checkpoint)
-        self.btn_pause_lang = UIButton(0.5, 0.57, 140, 18, self.loc.get_text("ui_lang", "LANG: EN"), self.font, self._toggle_lang)
+        self.btn_pause_lang = UIButton(0.5, 0.51, 140, 20, self.loc.get_text("ui_lang", "LANG: EN"), self.font, self._toggle_lang)
         self.panel_pause.add_child(self.btn_pause_lang)
-        self.btn_pause_hints = UIButton(0.5, 0.73, 140, 18, self.loc.get_text("btn_reset_hints", "RESET HINTS"), self.font, self._reset_hints)
+        self.btn_pause_hints = UIButton(0.5, 0.70, 140, 20, self.loc.get_text("btn_reset_hints", "RESET HINTS"), self.font, self._reset_hints)
         self.panel_pause.add_child(self.btn_pause_hints)
-        self.btn_pause_restart = UIButton(0.25, 0.89, 68, 18, self.loc.get_text("btn_restart", "RESTART"), self.font, self._full_restart)
+        self.btn_pause_restart = UIButton(0.25, 0.88, 68, 20, self.loc.get_text("btn_restart", "RESTART"), self.font, self.enter)
         self.panel_pause.add_child(self.btn_pause_restart)
-        self.btn_pause_menu = UIButton(0.75, 0.89, 68, 18, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
+        self.btn_pause_menu = UIButton(0.75, 0.88, 68, 20, self.loc.get_text("btn_menu", "MENU"), self.font, lambda: self.manager.change("menu"))
         self.panel_pause.add_child(self.btn_pause_menu)
         self.panel_pause.visible = False
         self.root.add_child(self.panel_pause)
@@ -218,12 +155,10 @@ class PlayState(State):
         self.root.layout(canvas_rect)
 
     def _toggle_lang(self) -> None:
-        """Cycle the active locale."""
         self.loc.toggle_locale()
         self._refresh_strings()
 
     def _reset_hints(self) -> None:
-        """Clear the tutorial hint history and update the save file."""
         if hasattr(self, "tutorial"):
             self.tutorial.reset_hints()
         existing_slot = self.save_manager.load_slot(self.active_slot_index)
@@ -233,17 +168,8 @@ class PlayState(State):
         if self.last_checkpoint_snapshot is not None:
             self.last_checkpoint_snapshot.progression.seen_hints = []
 
-    def _full_restart(self) -> None:
-        """Completely reset the gameplay session from spawn."""
-        self.last_checkpoint_snapshot = None
-        self.save_manager.delete_slot(self.active_slot_index)
-        self.enter()
-
     def _refresh_strings(self) -> None:
-        """Re-apply localised strings to all UI labels after a locale change."""
-        self.btn_over_checkpoint.set_text(self.loc.get_text("btn_checkpoint", "CHECKPOINT"))
         self.btn_over_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
-        self.btn_pause_checkpoint.set_text(self.loc.get_text("btn_checkpoint", "CHECKPOINT"))
         self.btn_over_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
         self.lbl_won.set_text(self.loc.get_text("win_title", "VICTORY!"))
         self.btn_won_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
@@ -254,20 +180,24 @@ class PlayState(State):
         self.btn_pause_hints.set_text(self.loc.get_text("btn_reset_hints", "RESET HINTS"))
         self.btn_pause_restart.set_text(self.loc.get_text("btn_restart", "RESTART"))
         self.btn_pause_menu.set_text(self.loc.get_text("btn_menu", "MENU"))
-        self.font_dialogue = self.loc.get_font(9)
-        self.font_dialogue_name = self.loc.get_font(11)
         if hasattr(self, "player") and hasattr(self.player, "death_key") and self.player.death_key:
             self.death_label.set_text(self.loc.get_text(self.player.death_key, "CAVE-IN COLLAPSE"))
         if hasattr(self, "tutorial"):
             self.tutorial.refresh_strings()
 
     def _unpause(self) -> None:
-        """Resume gameplay and hide the pause panel."""
         self.paused = False
         self.panel_pause.visible = False
 
+    def _make_light_mask(self, radius: int) -> pygame.Surface:
+        diam = radius * 2
+        surf = pygame.Surface((diam, diam), pygame.SRCALPHA)
+        for r in range(radius, 0, -1):
+            alpha = int(220 * ((radius - r) / radius) ** 1.6)
+            pygame.draw.circle(surf, (0, 0, 0, alpha), (radius, radius), r)
+        return surf
+
     def enter(self) -> None:
-        """(Re-)initialise the full gameplay session."""
         self.space = pymunk.Space()
         self.space.gravity = (0, 600)
         self.space.iterations = 20
@@ -285,11 +215,6 @@ class PlayState(State):
         self.mined_tile_coords = []
         self.elapsed_playtime = 0.0
         self.last_checkpoint_snapshot = None
-
-        self._afk_knock_emitted = False
-        self._afk_blind_emitted = False
-        self._afk_blind_alpha = 0.0
-        self._afk_ripples = []
 
         self.panel_over.visible = False
         self.panel_won.visible = False
@@ -309,7 +234,7 @@ class PlayState(State):
                 self.save_manager.save_slot(self.active_slot_index, self.last_checkpoint_snapshot)
 
         self.tutorial = TutorialSystem(self.font, self.loc, on_hint_fired=_on_hint_fired, initial_seen=initial_seen)
-        self.tutorial.fire("start", "WASD/Arrows:Move | Space:Jump | Shift:Climb | Q:Rope | E:Cabin")
+        self.tutorial.fire("start", "WASD / Arrows: Move  |  Space: Jump  |  Shift: Climb  |  E: Cabin")
 
         self.cabins = [CabinEntity(cid, cx, cy) for cx, cy, cid in self.level.cabin_locations]
 
@@ -331,17 +256,15 @@ class PlayState(State):
         for y in range(GRID_H):
             for x in range(GRID_W):
                 tile = self.level.grid[y][x]
-                if tile in (WALL, DIRT, STONE, SHALE):
+                if tile in (WALL, DIRT, STONE):
                     self.add_static_tile(x, y)
                 elif tile == ROCK:
                     self.level.grid[y][x] = EMPTY
                     self.rocks.append(RockEntity(x, y, self.space))
 
         skin = getattr(self.manager, "selected_skin", "classic")
-        if skin not in ("miner", "classic", "ruby", "emerald", "obsidian"):
-            skin = "classic" 
         spawn_x, spawn_y = self.level.spawn_x, self.level.spawn_y
-        self.player = Player(spawn_x, spawn_y, skin, self.space, AssetManager.get())
+        self.player = Player(spawn_x, spawn_y, skin, self.space)
         self.player.death_key = "death_cave_in"
 
         rock_map = {r.shape: r for r in self.rocks}
@@ -358,11 +281,7 @@ class PlayState(State):
             rock = data["rock_map"].get(rock_shape)
             if rock:
                 rock.restore_velocity()
-            p = data["player"]
-            is_falling_crush = False
-            if rock and rock.body.velocity.y > 45.0 and rock.body.position.y < p.body.position.y:
-                is_falling_crush = True
-            if arbiter.total_impulse.length > 1200 or is_falling_crush:
+            if arbiter.total_impulse.length > 2500:
                 p = data["player"]
                 if not p.is_dead:
                     p.is_dead = True
@@ -374,7 +293,6 @@ class PlayState(State):
                     p.death_reason = data["loc"].get_text(p.death_key, "CRUSHED")
                     data["camera"].add_shake(8.0, 20)
                     data["emit"](p.body.position.x, p.body.position.y, [(255, 60, 60), (255, 180, 40)], 25)
-                    data["events"].emit(EVT_ENTITY_HURT, x=p.body.position.x, y=p.body.position.y)
 
         def post_solve_wall(arbiter, space, data):
             if arbiter.total_impulse.length > 2500:
@@ -389,61 +307,24 @@ class PlayState(State):
                     p.death_reason = data["loc"].get_text(p.death_key, "CRUSHED")
                     data["camera"].add_shake(8.0, 20)
                     data["emit"](p.body.position.x, p.body.position.y, [(255, 60, 60), (255, 180, 40)], 25)
-                    data["events"].emit(EVT_ENTITY_HURT, x=p.body.position.x, y=p.body.position.y)
 
-        shared_data = {
+        player_rock_data = {
             "player": self.player,
             "camera": self.camera,
             "emit": self.emit_particles,
             "rock_map": rock_map,
-            "loc": self.loc,
-            "events": self._events,
+            "loc": self.loc
         }
-        self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=shared_data)
-        self.space.on_collision(3, 1, post_solve=post_solve_wall, data=shared_data)
-
-        self.block_hits.clear()
-        self.metro_cutscene_triggered = False
-        self.train_x = -200.0
-        self.driver_cat = DriverCatEntity(2.0 * TILE_SIZE + 40.0, 9.0 * TILE_SIZE)
-        self.soldier_cutscene_triggered = False
-        self.soldier_cat = SoldierCatEntity(15.0 * TILE_SIZE, 24.0 * TILE_SIZE, 12.0 * TILE_SIZE, 20.0 * TILE_SIZE)
-        self.feral_cutscene_triggered = False
-        self.feral_cat = FeralCatEntity(22.0 * TILE_SIZE, 28.0 * TILE_SIZE)
-        if getattr(self, "blast_door", None) is not None and self.blast_door.shape in self.space.shapes:
-            self.space.remove(self.blast_door.shape)
-        self.blast_door = BlastDoorEntity(25.0 * TILE_SIZE, 28.0 * TILE_SIZE, self.space)
-        self.blast_door_opened = False
-        self.feral_defeated = False
-        self.victory_gem_pos = None
-        self.victory_gem_collected = False
-        self.cutscene_mgr = CutsceneManager()
-        self.dialogue_box = DialogueBox()
-        self.emote_mgr = EmoteManager()
-
-        if getattr(self.manager, "load_saved_checkpoint", False):
-            setattr(self.manager, "load_saved_checkpoint", False)
-            existing_slot = self.save_manager.load_slot(self.active_slot_index)
-            if existing_slot is None:
-                existing_slot = self.save_manager.load_slot(0)
-                if existing_slot is not None:
-                    self.active_slot_index = 0
-            if existing_slot is not None and existing_slot.progression.checkpoint_id:
-                self.last_checkpoint_snapshot = existing_slot
-                self.respawn_at_checkpoint()
-
-    def _on_feral_defeated(self) -> None:
-        """Handle victory state when feral cat is defeated."""
-        self.feral_defeated = True
-        self.blast_door_opened = True
-        if self.blast_door is not None:
-            self.blast_door.open()
-        self.victory_gem_pos = (self.feral_cat.x, self.feral_cat.y)
-        if self.soldier_cat is not None:
-            self.soldier_cat.set_state(SoldierCatEntity.STATE_COMBAT_DEFEND)
+        wall_data = {
+            "player": self.player,
+            "camera": self.camera,
+            "emit": self.emit_particles,
+            "loc": self.loc
+        }
+        self.space.on_collision(3, 2, pre_solve=pre_solve_player_rock, post_solve=post_solve_player_rock, data=player_rock_data)
+        self.space.on_collision(3, 1, post_solve=post_solve_wall, data=wall_data)
 
     def add_static_tile(self, tx: int, ty: int) -> None:
-        """Register a static physics tile shape for the tile at (tx, ty)."""
         shape = pymunk.Poly(self.space.static_body, [
             (tx * TILE_SIZE, ty * TILE_SIZE),
             ((tx + 1) * TILE_SIZE, ty * TILE_SIZE),
@@ -456,7 +337,6 @@ class PlayState(State):
         self.tile_shapes[(tx, ty)] = shape
 
     def emit_particles(self, x: float, y: float, colors: list[tuple[int, int, int]], count: int) -> None:
-        """Spawn burst particles at world position (x, y)."""
         for _ in range(count):
             ang = random.uniform(0, 6.28)
             spd = random.uniform(0.6, 2.2)
@@ -469,19 +349,14 @@ class PlayState(State):
             )
 
     def _is_key(self, keys, code_en: int, char_ru_code: int) -> bool:
-        """Check either the English or Cyrillic scancode for a logical key."""
         try:
             return bool(keys[code_en] or keys[char_ru_code])
         except Exception:
             return bool(keys[code_en])
 
     def _dig_tile(self, dig_x: int, dig_y: int) -> bool:
-        """Attempt to dig the tile at grid coordinates (dig_x, dig_y)."""
-        if self.player.using_rope:
-            return False
         if 0 <= dig_x < GRID_W and 0 <= dig_y < GRID_H:
-            tile = self.level.grid[dig_y][dig_x]
-            if tile == DIRT:
+            if self.level.grid[dig_y][dig_x] == DIRT:
                 self.level.grid[dig_y][dig_x] = EMPTY
                 self.mined_tile_coords.append((dig_x, dig_y))
                 self.player.dig_time = self.player.dig_duration
@@ -495,57 +370,11 @@ class PlayState(State):
                 if (dig_x, dig_y) in self.tile_shapes:
                     self.space.remove(self.tile_shapes[(dig_x, dig_y)])
                     del self.tile_shapes[(dig_x, dig_y)]
-                for rock in self.rocks:
-                    rx = rock.body.position.x
-                    ry = rock.body.position.y
-                    tile_cx = dig_x * TILE_SIZE + TILE_SIZE / 2.0
-                    if abs(rx - tile_cx) < TILE_SIZE * 1.8:
-                        if (dig_y - 3) * TILE_SIZE <= ry <= (dig_y + 1) * TILE_SIZE:
-                            rock.body.activate()
-                            if abs(rx - tile_cx) < TILE_SIZE * 0.8 and ry < dig_y * TILE_SIZE:
-                                rock.body.apply_impulse_at_local_point((0.0, 30.0), (0.0, 0.0))
-                self._events.emit(EVT_BLOCK_BREAK, x=dig_x, y=dig_y)
-                self._audio.play("pickaxe_clink")
                 self.tutorial.fire("mine_dirt", "Dirt cleared! Watch for falling rocks above.")
                 return True
-            elif tile == SHALE:
-                hits = self.block_hits.get((dig_x, dig_y), 0) + 1
-                self.player.dig_time = self.player.dig_duration
-                self.player.dig_timer = int(self.player.dig_duration * 60)
-                self.camera.add_shake(1.0, 4)
-                self.emit_particles(
-                    dig_x * TILE_SIZE + TILE_SIZE // 2,
-                    dig_y * TILE_SIZE + TILE_SIZE // 2,
-                    [(120, 125, 135), (90, 95, 105)], 8
-                )
-                if hits < SHALE_MAX_HITS:
-                    self.block_hits[(dig_x, dig_y)] = hits
-                    self._audio.play_shale_crunch()
-                    self._events.emit(EVT_BLOCK_HIT, x=dig_x, y=dig_y)
-                    return True
-                else:
-                    self.block_hits.pop((dig_x, dig_y), None)
-                    self.level.grid[dig_y][dig_x] = EMPTY
-                    self.mined_tile_coords.append((dig_x, dig_y))
-                    if (dig_x, dig_y) in self.tile_shapes:
-                        self.space.remove(self.tile_shapes[(dig_x, dig_y)])
-                        del self.tile_shapes[(dig_x, dig_y)]
-                    for rock in self.rocks:
-                        rx = rock.body.position.x
-                        ry = rock.body.position.y
-                        tile_cx = dig_x * TILE_SIZE + TILE_SIZE / 2.0
-                        if abs(rx - tile_cx) < TILE_SIZE * 1.8:
-                            if (dig_y - 3) * TILE_SIZE <= ry <= (dig_y + 1) * TILE_SIZE:
-                                rock.body.activate()
-                                if abs(rx - tile_cx) < TILE_SIZE * 0.8 and ry < dig_y * TILE_SIZE:
-                                    rock.body.apply_impulse_at_local_point((0.0, 30.0), (0.0, 0.0))
-                    self._events.emit(EVT_BLOCK_BREAK, x=dig_x, y=dig_y)
-                    self._audio.play_shale_crunch()
-                    return True
         return False
 
     def save_checkpoint(self, cabin: CabinEntity) -> None:
-        """Snapshot the current game state to the active save slot."""
         slot = SaveSlotDTO(
             version=1,
             player=PlayerStateDTO(
@@ -576,22 +405,13 @@ class PlayState(State):
         )
         self.last_checkpoint_snapshot = slot
         self.save_manager.save_slot(self.active_slot_index, slot)
-        self._events.emit(EVT_CHECKPOINT_SAVE, cabin_id=cabin.cabin_id)
-        self._audio.play("ui_click")
 
     def respawn_at_checkpoint(self) -> None:
-        """Restore player state from the last checkpoint snapshot."""
         if self.last_checkpoint_snapshot is None:
-            existing_slot = self.save_manager.load_slot(self.active_slot_index)
-            if existing_slot is not None and existing_slot.progression.checkpoint_id:
-                self.last_checkpoint_snapshot = existing_slot
-            else:
-                self.enter()
-                return
+            self.enter()
+            return
 
         snap = self.last_checkpoint_snapshot
-        if hasattr(snap.player, "skin_id") and snap.player.skin_id:
-            self.player.skin_id = snap.player.skin_id
         self.player.is_dead = False
         self.player.death_key = ""
         self.player.death_reason = ""
@@ -607,16 +427,11 @@ class PlayState(State):
         self.player.dig_time = 0.0
         self.player.is_climbing = False
         self.player.is_digging = False
-        self.player.retract_rope()
-        self._afk_knock_emitted = False
-        self._afk_blind_emitted = False
-        self._afk_blind_alpha = 0.0
-        self._afk_ripples = []
 
         self.game_over = False
         self.panel_over.visible = False
         self.camera.x = self.player.body.position.x - CANVAS_W / 2.0
-        self.camera.y = self.player.body.position.y - CANVAS_H / 2.0
+        self.camera.y = self.player.body.position.y - (CANVAS_H - PANEL_HEIGHT) / 2.0
 
         for r_dto, rock in zip(snap.world.rocks, self.rocks):
             rock.body.position = (r_dto.position.x, r_dto.position.y)
@@ -627,70 +442,19 @@ class PlayState(State):
             rock.prev_angle = r_dto.angle
 
     def handle_event(self, event: pygame.event.Event, mouse_pos: tuple[int, int]) -> None:
-        """Process a single pygame event for UI and input."""
         clicked = (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1)
         self.root.update(mouse_pos, clicked)
 
         if event.type == pygame.KEYDOWN and not self.game_over and not self.game_won:
-            if self.cutscene_mgr.is_active:
-                if event.key in (pygame.K_SPACE, pygame.K_ESCAPE):
-                    self.cutscene_mgr.skip()
-                    return
-                if event.key in (pygame.K_e, pygame.K_RETURN, pygame.K_KP_ENTER):
-                    if self.dialogue_box.is_open:
-                        self.dialogue_box.advance()
-                    return
-            elif self.dialogue_box.is_open:
-                if event.key in (pygame.K_e, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-                    self.dialogue_box.advance()
-                    return
-
             if event.key == pygame.K_ESCAPE:
                 self.paused = not self.paused
                 self.panel_pause.visible = self.paused
 
-            if event.key == pygame.K_q and not self.paused:
-                self.player.toggle_tool()
-                self._audio.play("ui_click")
-                mode = "Rope" if self.player.using_rope else "Pickaxe"
-                self.tutorial.fire(f"tool_{mode.lower()}", f"Tool: {mode}")
-
-        if mouse_pos:
-            self.mouse_canvas_pos = mouse_pos
-
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_r, 1082, 1050):
-                if self.last_checkpoint_snapshot is not None:
-                    self.respawn_at_checkpoint()
-                else:
-                    existing_slot = self.save_manager.load_slot(self.active_slot_index)
-                    if existing_slot is not None and existing_slot.progression.checkpoint_id:
-                        self.last_checkpoint_snapshot = existing_slot
-                        self.respawn_at_checkpoint()
-                    else:
-                        self.enter()
-
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.player.using_rope and not self.paused and not self.game_over and not self.game_won:
-                cam_x = int(self.camera.x)
-                cam_y = int(self.camera.y)
-                mx, my = mouse_pos
-                px = int(self.player.body.position.x)
-                py = int(self.player.body.position.y)
-                angle = math.atan2((my + cam_y) - py, (mx + cam_x) - px)
-                if self.player.hook is not None and not self.player.hook.dead:
-                    self.player.retract_rope()
-                else:
-                    self.player.fire_rope(self.space, angle)
-                    self._events.emit(EVT_ROPE_THROW, x=px, y=py, angle=angle)
-                    self._audio.play("rope_whoosh")
-
-        if event.type == pygame.MOUSEWHEEL:
-            if not self.paused and not self.game_over and not self.game_won:
-                self.player.toggle_tool()
+                self.enter()
 
     def update(self, dt: float) -> None:
-        """Advance physics, animation, AFK timers, and game logic by dt seconds."""
         if self.game_over or self.game_won or self.paused:
             return
 
@@ -707,45 +471,12 @@ class PlayState(State):
         climb_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
         interact = keys[pygame.K_e] or self._is_key(keys, pygame.K_e, 1091) or up
 
-        any_input = up or down or left or right or jump or climb_held or keys[pygame.K_q]
-
-        was_on_ground_before = getattr(self.player, "on_ground", False)
-        prev_afk_phase = self.player.afk_phase if hasattr(self.player, "afk_phase") else 0
-
         while self.physics_accumulator >= FIXED_DT:
             self.player.save_previous_state()
             for rock in self.rocks:
                 rock.save_previous_state()
 
-            self.player.update(
-                up, down, left, right, jump, climb_held, FIXED_DT,
-                self.space, self.emit_particles, self.camera,
-                any_input=any_input,
-                afk_knock_seconds=AFK_KNOCK_SECONDS,
-                afk_blind_seconds=AFK_BLIND_SECONDS,
-            )
-
-            if self.player.on_ground and not was_on_ground_before:
-                self._events.emit(EVT_PLAYER_LAND, x=self.player.body.position.x, y=self.player.body.position.y)
-                self._audio.play("dirt_crumble")
-            was_on_ground_before = self.player.on_ground
-
-            if jump and self.player.on_ground:
-                self._events.emit(EVT_PLAYER_JUMP, x=self.player.body.position.x, y=self.player.body.position.y)
-                self._audio.play("cat_meow")
-
-            new_afk = self.player.afk_phase
-            if new_afk >= 2 and prev_afk_phase < 2 and not self._afk_knock_emitted:
-                self._afk_knock_emitted = True
-                self._events.emit(EVT_AFK_KNOCK)
-                self._audio.play("screen_knock")
-                for _ in range(3):
-                    self._afk_ripples.append({"r": 0.0, "max_r": 30.0, "alpha": 200})
-            if new_afk >= 4 and prev_afk_phase < 4 and not self._afk_blind_emitted:
-                self._afk_blind_emitted = True
-                self._events.emit(EVT_AFK_BLIND)
-                self._audio.play("screen_knock")
-            prev_afk_phase = new_afk
+            self.player.update(up, down, left, right, jump, climb_held, FIXED_DT, self.space, self.emit_particles, self.camera)
 
             if interact and not self.player.is_dead and not self.player.is_climbing:
                 px = self.player.body.position.x
@@ -765,13 +496,13 @@ class PlayState(State):
             if self.player.is_climbing:
                 self.tutorial.fire("climb_stamina", "Climbing uses stamina. Rest on ground to recover!")
 
-            if not self.player.is_dead and not self.player.is_climbing and not self.player.using_rope:
+            if not self.player.is_dead and not self.player.is_climbing:
                 px = self.player.body.position.x
                 py = self.player.body.position.y
                 hw = self.player.w / 2.0
                 hh = self.player.h / 2.0
 
-                if (jump or up) and (self.player.on_ground or self.player.body.velocity.y < -30.0):
+                if (jump and self.player.on_ground) or (self.player.body.velocity.y < -30.0):
                     above_y = int((py - hh - 2.0) // TILE_SIZE)
                     for test_x in [int((px - hw + 2.0) // TILE_SIZE), int((px + hw - 2.0) // TILE_SIZE)]:
                         self._dig_tile(test_x, above_y)
@@ -780,7 +511,7 @@ class PlayState(State):
                     dir_x, dir_y = 0, 0
                     if down and self.player.on_ground:
                         dir_y = 1
-                    elif up:
+                    elif up and not self.player.on_ground:
                         dir_y = -1
                     else:
                         dir_x = 1 if self.player.facing_right else -1
@@ -800,150 +531,6 @@ class PlayState(State):
         self.render_alpha = self.physics_accumulator / FIXED_DT
         self.tutorial.update()
         self.particle_pool.update()
-
-        if self.cutscene_mgr.is_active:
-            self.cutscene_mgr.update(dt)
-        if self.dialogue_box.is_open:
-            self.dialogue_box.update(dt)
-            self.player.in_dialogue = True
-            if self.driver_cat is not None and self.dialogue_box.speaker_id == "driver":
-                self.driver_cat.anim_state = "talk"
-            if self.soldier_cat is not None and self.dialogue_box.speaker_id == "soldier":
-                self.soldier_cat.set_state(SoldierCatEntity.STATE_DIALOGUE)
-            if self.feral_cat is not None and self.dialogue_box.speaker_id == "feral":
-                self.feral_cat.anim_state = "talk"
-                self.feral_cat.in_dialogue = True
-        else:
-            self.player.in_dialogue = False
-            if self.feral_cat is not None and self.feral_cat.in_dialogue:
-                self.feral_cat.in_dialogue = False
-        self.emote_mgr.update(dt)
-
-        if self.driver_cat is not None:
-            self.driver_cat.update(dt)
-        if self.soldier_cat is not None:
-            self.soldier_cat.update(dt)
-        if self.feral_cat is not None:
-            px = self.player.body.position.x
-            py = self.player.body.position.y
-            cam_x, cam_y = self.camera.x, self.camera.y
-            px_s = int(px - cam_x)
-            py_s = int(py - cam_y)
-            mx_canvas, my_canvas = getattr(self.manager, "mouse_pos", self.mouse_canvas_pos)
-            cursor_angle = math.atan2(my_canvas - py_s, mx_canvas - px_s)
-            angle_rad = self.player.get_flashlight_angle_rad(cursor_angle)
-
-            dx = self.feral_cat.x - px
-            dy = self.feral_cat.y - py
-            dist = math.hypot(dx, dy)
-            cat_angle = math.atan2(dy, dx)
-            diff_angle = abs((cat_angle - angle_rad + math.pi) % (2.0 * math.pi) - math.pi)
-
-            is_illuminated = (dist < 140.0 and diff_angle < math.radians(45.0)) or (dist < 32.0)
-            self.feral_cat.update(dt, px, py, is_illuminated=is_illuminated)
-
-            if not self.feral_cat.is_defeated and not self.cutscene_mgr.is_active:
-                if dist < 32.0 and (self.player.is_digging or up or down or left or right):
-                    knockback = 1.0 if px < self.feral_cat.x else -1.0
-                    defeated = self.feral_cat.take_damage(1, knockback)
-                    self.camera.add_shake(1.5, 4)
-                    self.emit_particles(self.feral_cat.x, self.feral_cat.y, [(255, 60, 60), (220, 200, 220)], 10)
-                    self._audio.play("pickaxe_clink")
-                    if defeated:
-                        self._on_feral_defeated()
-
-            if self.feral_cat.is_defeated and not self.feral_defeated:
-                self._on_feral_defeated()
-
-        if self.blast_door is not None:
-            self.blast_door.update(dt)
-
-        if not self.metro_cutscene_triggered and self.player.body.position.y >= 7.5 * TILE_SIZE:
-            self.metro_cutscene_triggered = True
-            def _on_metro_done() -> None:
-                self.train_x = float(2 * TILE_SIZE)
-                self.driver_cat.visible = True
-                self.driver_cat.has_spoken = True
-                self.driver_cat.anim_state = "action_lantern"
-                self.player.ropes = 6
-                self._audio.play("train_brake")
-            self.driver_cat.visible = True
-            self.driver_cat.anim_state = "walk"
-            actions = [
-                Wait(0.2),
-                ShowDialogue("driver", "Train Driver", "driver_greeting", "Greetings, traveler of the underground!", portrait_key="cat_driver"),
-            ]
-            ctx = {
-                "camera": self.camera,
-                "entities": {"player": self.player, "driver": self.driver_cat},
-                "dialogue_box": self.dialogue_box,
-                "emote_manager": self.emote_mgr,
-                "event_bus": self._events,
-            }
-            self.cutscene_mgr.start_cutscene(actions, ctx, on_complete=_on_metro_done)
-
-        if not self.soldier_cutscene_triggered and self.soldier_cat is not None:
-            if math.hypot(self.player.body.position.x - self.soldier_cat.x, self.player.body.position.y - self.soldier_cat.y) < 45.0:
-                self.soldier_cutscene_triggered = True
-                self.soldier_cat.set_state(SoldierCatEntity.STATE_DIALOGUE)
-                def _on_soldier_done() -> None:
-                    if self.soldier_cat is not None:
-                        self.soldier_cat.set_state(SoldierCatEntity.STATE_PATROL)
-                actions = [
-                    Wait(0.2),
-                    ShowDialogue("soldier", "Watermelon Soldier", "soldier_warning", "Halt! Beyond this barricade lies the feral cat domain!", portrait_key="cat_soldier"),
-                ]
-                ctx = {
-                    "camera": self.camera,
-                    "entities": {"player": self.player, "soldier": self.soldier_cat},
-                    "dialogue_box": self.dialogue_box,
-                    "emote_manager": self.emote_mgr,
-                    "event_bus": self._events,
-                }
-                self.cutscene_mgr.start_cutscene(actions, ctx, on_complete=_on_soldier_done)
-
-        if not self.feral_cutscene_triggered and self.feral_cat is not None:
-            if math.hypot(self.player.body.position.x - (self.feral_cat.x - 30.0), self.player.body.position.y - self.feral_cat.y) < 45.0:
-                self.feral_cutscene_triggered = True
-                if self.soldier_cat is not None:
-                    self.soldier_cat.set_state(SoldierCatEntity.STATE_PINNED_DOWN)
-                self.feral_cat.anim_state = "talk"
-                self.feral_cat.in_dialogue = True
-                def _on_feral_cutscene_done() -> None:
-                    if self.feral_cat is not None:
-                        self.feral_cat.in_dialogue = False
-                        self.feral_cat.anim_state = "idle"
-                actions = [
-                    Wait(0.2),
-                    ShowDialogue("feral", "Feral Cat", "feral_screech", "Hsss! My feral territory!", portrait_key="cat_feral"),
-                ]
-                ctx = {
-                    "camera": self.camera,
-                    "entities": {"player": self.player, "feral": self.feral_cat, "soldier": self.soldier_cat},
-                    "dialogue_box": self.dialogue_box,
-                    "emote_manager": self.emote_mgr,
-                    "event_bus": self._events,
-                }
-                self.cutscene_mgr.start_cutscene(actions, ctx, on_complete=_on_feral_cutscene_done)
-
-        if self.victory_gem_pos is not None and not self.victory_gem_collected:
-            if math.hypot(self.player.body.position.x - self.victory_gem_pos[0], self.player.body.position.y - self.victory_gem_pos[1]) < 30.0:
-                self.victory_gem_collected = True
-                self.score += 100
-                self._audio.play("ui_click")
-
-        for rip in self._afk_ripples[:]:
-            rip["r"] += 1.2
-            rip["alpha"] = max(0, rip["alpha"] - 8)
-            if rip["r"] >= rip["max_r"] or rip["alpha"] <= 0:
-                self._afk_ripples.remove(rip)
-
-        if self.player.afk_phase >= 4:
-            target_alpha = 160.0 + math.sin(self.elapsed_playtime * 3.0) * 60.0
-            self._afk_blind_alpha = min(220.0, self._afk_blind_alpha + 4.0)
-            self._afk_blind_alpha = min(self._afk_blind_alpha, target_alpha)
-        else:
-            self._afk_blind_alpha = max(0.0, self._afk_blind_alpha - 10.0)
 
         if self.player.is_dead:
             self.game_over = True
@@ -979,7 +566,6 @@ class PlayState(State):
                         self.recorded_score = True
 
     def render(self, surface: pygame.Surface) -> None:
-        """Render the full frame: multi-layer world, Biome 1 metro cavern, lighting, diegetic HUD, and overlays."""
         interp_px, interp_py = self.player.get_interpolated_pos(self.render_alpha)
         if not self.paused:
             moving_down = (not self.player.on_ground and self.player.body.velocity.y > 60.0)
@@ -992,56 +578,37 @@ class PlayState(State):
         cam_x, cam_y = int(cam_x), int(cam_y)
 
         view_w = CANVAS_W
-        view_h = CANVAS_H
+        view_h = CANVAS_H - PANEL_HEIGHT
 
         depth_ratio = min(1.0, max(0.0, ((interp_py - 60.0) / self.world_h) * 2.5))
-        self.play_view.fill((20, 24, 32))
+        depth_key = int(depth_ratio * 30)
+        if not hasattr(self, "_cached_bg_key") or self._cached_bg_key != depth_key:
+            self._cached_bg_key = depth_key
+            if not hasattr(self, "_bg_col_surf"):
+                self._bg_col_surf = pygame.Surface((1, view_h))
+            for y in range(view_h):
+                t = y / view_h
+                cr = int((45 * (1.0 - depth_ratio) + 8 * depth_ratio) * (1.0 - t * 0.5))
+                cg = int((120 * (1.0 - depth_ratio) + 12 * depth_ratio) * (1.0 - t * 0.5))
+                cb = int((130 * (1.0 - depth_ratio) + 18 * depth_ratio) * (1.0 - t * 0.5))
+                self._bg_col_surf.set_at((0, y), (cr, cg, cb))
+        pygame.transform.scale(self._bg_col_surf, (CANVAS_W, view_h), self.play_view)
 
         start_col = max(0, int((cam_x - TILE_SIZE) // TILE_SIZE))
         end_col = min(GRID_W, int((cam_x + CANVAS_W + TILE_SIZE) // TILE_SIZE) + 1)
         start_row = max(0, int((cam_y - TILE_SIZE) // TILE_SIZE))
         end_row = min(GRID_H, int((cam_y + view_h + TILE_SIZE) // TILE_SIZE) + 1)
 
-        am = AssetManager.get()
-
-        if cam_y < 80:
-            sky_rect = pygame.Rect(0, 0, CANVAS_W, max(0, int(3 * TILE_SIZE - cam_y)))
-            if sky_rect.height > 0:
-                for sy in range(sky_rect.height):
-                    ratio = sy / max(1, sky_rect.height)
-                    r = int(22 * (1.0 - ratio) + 42 * ratio)
-                    g = int(26 * (1.0 - ratio) + 48 * ratio)
-                    b = int(36 * (1.0 - ratio) + 62 * ratio)
-                    pygame.draw.line(self.play_view, (r, g, b), (0, sy), (CANVAS_W, sy))
-                try:
-                    panelki = am.get_sprite("metro_props", "panelki")
-                    px_pan = int((-cam_x * 0.25) % panelki.get_width()) - panelki.get_width()
-                    py_pan = int(3 * TILE_SIZE - cam_y - panelki.get_height())
-                    while px_pan < CANVAS_W:
-                        self.play_view.blit(panelki, (px_pan, py_pan))
-                        px_pan += panelki.get_width()
-                except Exception:
-                    pass
-
-        try:
-            bg_brick = am.get_sprite("tiles", "bg_brick")
-        except Exception:
-            bg_brick = None
-
-        for y in range(start_row, end_row):
-            for x in range(start_col, end_col):
-                if 0 <= x < GRID_W and 0 <= y < GRID_H:
-                    if self.level.grid[y][x] == EMPTY and y >= 4 and bg_brick is not None:
-                        rx = int(x * TILE_SIZE - cam_x)
-                        ry = int(y * TILE_SIZE - cam_y)
-                        self.play_view.blit(bg_brick, (rx, ry))
-
-        self._render_metro_props(cam_x, cam_y, am)
-
-        coin_sprites = am.get_sprite("coin")
+        coin_sprites = AssetManager.get().get_sprite("coin")
         coin_frame = coin_sprites[(self._coin_ticks // 80) % len(coin_sprites)]
 
+        light_cutoff_sq = 95.0 * 95.0
+        player_alive = not self.player.is_dead
+
         for y in range(start_row, end_row):
+            tile_world_y = y * TILE_SIZE + TILE_SIZE / 2.0
+            dy = tile_world_y - interp_py if player_alive else 999.0
+            dy_sq = dy * dy
             for x in range(start_col, end_col):
                 if 0 <= x < GRID_W and 0 <= y < GRID_H:
                     cell = self.level.grid[y][x]
@@ -1049,399 +616,94 @@ class PlayState(State):
                         continue
                     rx = int(x * TILE_SIZE - cam_x)
                     ry = int(y * TILE_SIZE - cam_y)
+                    tile_world_x = x * TILE_SIZE + TILE_SIZE / 2.0
+                    dx = tile_world_x - interp_px if player_alive else 999.0
+                    dist_sq = dx * dx + dy_sq
+
+                    if depth_ratio > 0.4 and dist_sq > light_cutoff_sq and cell != COIN:
+                        self.play_view.fill((10, 14, 20), (rx, ry, TILE_SIZE, TILE_SIZE))
+                        continue
 
                     if cell == WALL:
                         t_name = "wall_surface" if (y == 0 or self.level.grid[y - 1][x] == EMPTY) else "wall_under"
-                        self.play_view.blit(am.get_sprite("tiles", t_name), (rx, ry))
+                        self.play_view.blit(AssetManager.get().get_sprite("tiles", t_name), (rx, ry))
                     elif cell == DIRT:
-                        self.play_view.blit(am.get_sprite("tiles", "dirt"), (rx, ry))
+                        self.play_view.blit(AssetManager.get().get_sprite("tiles", "dirt"), (rx, ry))
                     elif cell == STONE:
-                        self.play_view.blit(am.get_sprite("tiles", "stone"), (rx, ry))
-                    elif cell == SHALE:
-                        self.play_view.blit(am.get_sprite("tiles", "shale"), (rx, ry))
+                        self.play_view.blit(AssetManager.get().get_sprite("tiles", "stone"), (rx, ry))
                     elif cell == COIN:
                         self.play_view.blit(coin_frame, (rx, ry))
-
-                    if (x, y) in self.block_hits:
-                        hits = self.block_hits[(x, y)]
-                        crack_col = (22, 18, 24)
-                        if hits >= 1:
-                            pygame.draw.line(self.play_view, crack_col, (rx + 4, ry + 3), (rx + 11, ry + 12), 1)
-                            pygame.draw.line(self.play_view, crack_col, (rx + 11, ry + 12), (rx + 16, ry + 10), 1)
-                        if hits >= 2:
-                            pygame.draw.line(self.play_view, crack_col, (rx + 10, ry + 5), (rx + 6, ry + 15), 1)
-                            pygame.draw.line(self.play_view, crack_col, (rx + 6, ry + 15), (rx + 14, ry + 17), 1)
-
-                    border_col = (18, 14, 20)
-                    if y > 0 and self.level.grid[y - 1][x] == EMPTY:
-                        pygame.draw.rect(self.play_view, border_col, (rx, ry, TILE_SIZE, 2))
-                    if y < GRID_H - 1 and self.level.grid[y + 1][x] == EMPTY:
-                        pygame.draw.rect(self.play_view, border_col, (rx, ry + TILE_SIZE - 2, TILE_SIZE, 2))
-                    if x > 0 and self.level.grid[y][x - 1] == EMPTY:
-                        pygame.draw.rect(self.play_view, border_col, (rx, ry, 2, TILE_SIZE))
-                    if x < GRID_W - 1 and self.level.grid[y][x + 1] == EMPTY:
-                        pygame.draw.rect(self.play_view, border_col, (rx + TILE_SIZE - 2, ry, 2, TILE_SIZE))
 
         for cabin in self.cabins:
             cabin.render(self.play_view, cam_x, cam_y)
 
+        asset_mgr = AssetManager.get()
         for rock in self.rocks:
-            rock.render(self.play_view, cam_x, cam_y, am, self.render_alpha, view_w, view_h)
-
+            rock.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha, view_w, view_h)
         self.particle_pool.render(self.play_view, cam_x, cam_y, view_w, view_h)
+        self.player.render(self.play_view, cam_x, cam_y, asset_mgr, self.render_alpha)
 
-        if self.player.using_rope and self.player.hook is None:
-            mx_canvas, my_canvas = getattr(self.manager, "mouse_pos", self.mouse_canvas_pos)
-            px_screen = int(interp_px - cam_x)
-            py_screen = int(interp_py - cam_y)
-            aim_angle = math.atan2(my_canvas - py_screen, mx_canvas - px_screen)
-            dummy = HookEntity(interp_px, interp_py, aim_angle, self.space, self.player.body)
-            dummy.render_preview(self.play_view, cam_x, cam_y, interp_px, interp_py, aim_angle)
-
-        if self.driver_cat is not None and self.driver_cat.visible:
-            self.driver_cat.render(self.play_view, cam_x, cam_y, am)
-        if self.soldier_cat is not None:
-            self.soldier_cat.render(self.play_view, cam_x, cam_y, am)
-        if self.feral_cat is not None and not self.feral_defeated:
-            self.feral_cat.render(self.play_view, cam_x, cam_y, am)
-        if self.blast_door is not None:
-            self.blast_door.render(self.play_view, cam_x, cam_y)
-        if self.victory_gem_pos is not None and not self.victory_gem_collected:
-            gx = int(self.victory_gem_pos[0] - cam_x)
-            gy = int(self.victory_gem_pos[1] - cam_y)
-            pygame.draw.polygon(self.play_view, (60, 240, 220), [(gx, gy - 6), (gx + 5, gy), (gx, gy + 6), (gx - 5, gy)])
-            pygame.draw.polygon(self.play_view, (220, 255, 255), [(gx, gy - 3), (gx + 2, gy), (gx, gy + 3), (gx - 2, gy)])
-
-        self.emote_mgr.render(self.play_view, cam_x, cam_y)
-
-        self.player.render(self.play_view, cam_x, cam_y, am, self.render_alpha)
-
-        self._render_darkness_layer(cam_x, cam_y, interp_px, interp_py, depth_ratio, start_row, end_row, start_col, end_col)
-
-        surface.blit(self.play_view, (0, 0))
-        self._render_diegetic_hud(surface)
-        if self.dialogue_box.is_open:
-            self.dialogue_box.render(surface, self.font_dialogue, self.font_dialogue_name)
-
-        if self._afk_ripples:
-            px_s = int(interp_px - cam_x)
-            py_s = int(interp_py - cam_y)
-            for rip in self._afk_ripples:
-                if rip["alpha"] > 0:
-                    pygame.draw.circle(surface, (200, 200, 255), (px_s, py_s), int(rip["r"]), 1)
-
-        if self._afk_blind_alpha > 0:
-            blind = pygame.Surface((CANVAS_W, CANVAS_H), pygame.SRCALPHA)
-            blind.fill((255, 255, 220, int(self._afk_blind_alpha)))
-            surface.blit(blind, (0, 0))
-
-        self.tutorial.render(surface)
-        self.root.render(surface)
-
-    def _render_metro_props(self, cam_x: int, cam_y: int, am: AssetManager) -> None:
-        """Render Metro Station Cavern props: train car, pipes, tracks, scaffolding, and bulbs."""
-        try:
-            pipes_img = am.get_sprite("metro_props", "pipes")
-            pipes_y = int(5 * TILE_SIZE - 2 - cam_y)
-            for px in range(2 * TILE_SIZE, (GRID_W - 2) * TILE_SIZE, pipes_img.get_width()):
-                rx = int(px - cam_x)
-                if -pipes_img.get_width() <= rx <= CANVAS_W:
-                    self.play_view.blit(pipes_img, (rx, pipes_y))
-        except Exception:
-            pass
-
-        try:
-            tracks_img = am.get_sprite("metro_props", "tracks")
-            tracks_y = int(10 * TILE_SIZE - 8 - cam_y)
-            for tx in range(2 * TILE_SIZE, (GRID_W - 2) * TILE_SIZE, tracks_img.get_width()):
-                rx = int(tx - cam_x)
-                if -tracks_img.get_width() <= rx <= CANVAS_W:
-                    self.play_view.blit(tracks_img, (rx, tracks_y))
-        except Exception:
-            pass
-
-        try:
-            scaff_img = am.get_sprite("metro_props", "scaffolding")
-            scaff_x = int((GRID_W - 6) * TILE_SIZE - cam_x)
-            scaff_y = int(10 * TILE_SIZE - scaff_img.get_height() - cam_y)
-            if -scaff_img.get_width() <= scaff_x <= CANVAS_W:
-                self.play_view.blit(scaff_img, (scaff_x, scaff_y))
-        except Exception:
-            pass
-
-        try:
-            bulb_img = am.get_sprite("metro_props", "hanging_bulb")
-            bulb_xs = [8, 14, 20, 26, 32, 38]
-            bulb_y = int(5 * TILE_SIZE - 2 - cam_y)
-            for bx_tile in bulb_xs:
-                rx = int(bx_tile * TILE_SIZE + 4 - cam_x)
-                if -bulb_img.get_width() <= rx <= CANVAS_W:
-                    self.play_view.blit(bulb_img, (rx, bulb_y))
-        except Exception:
-            pass
-
-        try:
-            train_img = am.get_sprite("metro_props", "train_car")
-            tx = getattr(self, "train_x", float(2 * TILE_SIZE))
-            train_x = int(tx - cam_x)
-            train_y = int(10 * TILE_SIZE - train_img.get_height() - cam_y)
-            if -train_img.get_width() <= train_x <= CANVAS_W:
-                self.play_view.blit(train_img, (train_x, train_y))
-        except Exception:
-            pass
-
-    def _render_darkness_layer(
-        self,
-        cam_x: int,
-        cam_y: int,
-        interp_px: float,
-        interp_py: float,
-        depth_ratio: float,
-        start_row: int,
-        end_row: int,
-        start_col: int,
-        end_col: int,
-    ) -> None:
-        """Compose darkness, metro station lighting, and smooth directional headlamp cone."""
-        base_alpha = min(255, int(30 + depth_ratio * 225))
-        self.darkness_layer.fill((6, 8, 12, base_alpha))
-
+        self.darkness_layer.fill((6, 8, 12, min(255, int(30 + depth_ratio * 225))))
         for y in range(start_row, end_row):
             for x in range(start_col, end_col):
                 if 0 <= x < GRID_W and 0 <= y < GRID_H and self.level.grid[y][x] == COIN:
-                    coin_light = self._get_or_make_coin_light()
                     self.darkness_layer.blit(
-                        coin_light,
+                        self.light_coin,
                         (int(x * TILE_SIZE - cam_x) - 2, int(y * TILE_SIZE - cam_y) - 2),
                         special_flags=pygame.BLEND_RGBA_SUB
                     )
 
-        bulb_xs = [8, 14, 20, 26, 32, 38]
-        bulb_y_screen = int(5 * TILE_SIZE + 10 - cam_y)
-        if -50 <= bulb_y_screen <= CANVAS_H + 50:
-            bulb_glow = self._get_or_make_bulb_glow(38)
-            for bx_tile in bulb_xs:
-                bx_s = int(bx_tile * TILE_SIZE + 10 - cam_x)
-                if -40 <= bx_s <= CANVAS_W + 40:
-                    self.darkness_layer.blit(
-                        bulb_glow,
-                        (bx_s - 38, bulb_y_screen - 38),
-                        special_flags=pygame.BLEND_RGBA_SUB,
-                    )
-
-        train_front_x = int(2 * TILE_SIZE + 140 - cam_x)
-        train_front_y = int(10 * TILE_SIZE - 28 - cam_y)
-        if -100 <= train_front_x <= CANVAS_W + 100 and -100 <= train_front_y <= CANVAS_H + 100:
-            headlight_cone = self._build_cone_mask(CANVAS_W, CANVAS_H, train_front_x, train_front_y, 0.0, 0.0, beam_length=150, beam_angle=40.0)
-            self.darkness_layer.blit(headlight_cone, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
-
         if not self.player.is_dead:
-            px_s = int(interp_px - cam_x)
-            py_s = int(interp_py - cam_y)
-            mx_canvas, my_canvas = getattr(self.manager, "mouse_pos", self.mouse_canvas_pos)
-            cursor_angle = math.atan2(my_canvas - py_s, mx_canvas - px_s)
-            angle_rad = self.player.get_flashlight_angle_rad(cursor_angle)
-
-            glow_r = FLASHLIGHT_SELF_GLOW
-            self_glow_surf = self._get_or_make_self_glow(glow_r)
-            self.darkness_layer.blit(
-                self_glow_surf,
-                (px_s - glow_r, py_s - glow_r),
-                special_flags=pygame.BLEND_RGBA_SUB,
-            )
-
-            cone_surf = self._build_smooth_cone_mask(CANVAS_W, CANVAS_H, px_s, py_s, angle_rad)
-            self.darkness_layer.blit(cone_surf, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
+            px = int(interp_px - cam_x) - self.light_player.get_width() // 2
+            py = int(interp_py - cam_y) - self.light_player.get_height() // 2
+            self.darkness_layer.blit(self.light_player, (px, py), special_flags=pygame.BLEND_RGBA_SUB)
 
         self.play_view.blit(self.darkness_layer, (0, 0))
+        surface.blit(self.play_view, (0, PANEL_HEIGHT))
+        self._render_panel(surface)
+        self.tutorial.render(surface)
+        self.root.render(surface)
 
-    def _get_or_make_coin_light(self) -> pygame.Surface:
-        """Return cached coin light mask."""
-        if not hasattr(self, "_coin_light_surf"):
-            radius = 24
-            diam = radius * 2
-            surf = pygame.Surface((diam, diam), pygame.SRCALPHA)
-            for r in range(radius, 0, -1):
-                alpha = int(220 * ((radius - r) / radius) ** 1.6)
-                pygame.draw.circle(surf, (0, 0, 0, alpha), (radius, radius), r)
-            self._coin_light_surf = surf
-        return self._coin_light_surf
+    def _render_panel(self, surface: pygame.Surface) -> None:
+        for py in range(PANEL_HEIGHT):
+            pt = py / PANEL_HEIGHT
+            pygame.draw.line(
+                self.panel_surface,
+                (int(32 - 16 * pt), int(38 - 18 * pt), int(50 - 22 * pt)),
+                (0, py), (CANVAS_W, py)
+            )
+        pygame.draw.line(self.panel_surface, (255, 200, 60), (0, PANEL_HEIGHT - 2), (CANVAS_W, PANEL_HEIGHT - 2), 2)
+        pygame.draw.line(self.panel_surface, PAL_OUTLINE, (0, PANEL_HEIGHT - 1), (CANVAS_W, PANEL_HEIGHT - 1), 1)
 
-    def _get_or_make_self_glow(self, radius: int) -> pygame.Surface:
-        """Return cached player self-glow circle mask."""
-        key = radius
-        if not hasattr(self, "_self_glow_cache"):
-            self._self_glow_cache: dict[int, pygame.Surface] = {}
-        if key not in self._self_glow_cache:
-            diam = radius * 2
-            surf = pygame.Surface((diam, diam), pygame.SRCALPHA)
-            for r in range(radius, 0, -1):
-                alpha = int(200 * ((radius - r) / radius) ** 1.4)
-                pygame.draw.circle(surf, (0, 0, 0, alpha), (radius, radius), r)
-            self._self_glow_cache[key] = surf
-        return self._self_glow_cache[key]
+        score_lbl = self.loc.get_text("ui_score", "SCORE")
+        score_surf = self.font.render(f"{score_lbl}:{self.score}", True, COLOR_GOLD)
+        self.panel_surface.blit(score_surf, (6, 5))
 
-    def _get_or_make_bulb_glow(self, radius: int) -> pygame.Surface:
-        """Return cached hanging bulb warm radial glow mask."""
-        if not hasattr(self, "_bulb_glow_surf"):
-            diam = radius * 2
-            surf = pygame.Surface((diam, diam), pygame.SRCALPHA)
-            for r in range(radius, 0, -1):
-                alpha = int(190 * ((radius - r) / radius) ** 1.3)
-                pygame.draw.circle(surf, (0, 0, 0, alpha), (radius, radius), r)
-            self._bulb_glow_surf = surf
-        return self._bulb_glow_surf
+        depth_lbl = self.loc.get_text("ui_depth", "DEPTH")
+        depth_val = max(0, int((self.player.body.position.y - 60.0) // TILE_SIZE))
+        depth_surf = self.font.render(f"{depth_lbl}:{depth_val}m", True, COLOR_TEXT)
+        self.panel_surface.blit(depth_surf, (6, 17))
 
-    def _build_smooth_cone_mask(
-        self,
-        view_w: int,
-        view_h: int,
-        px: int,
-        py: int,
-        angle_rad: float,
-    ) -> pygame.Surface:
-        """Build smooth multi-layer warm flashlight cone with soft falloff."""
-        if not hasattr(self, "_smooth_cone_surf") or self._smooth_cone_surf.get_size() != (view_w, view_h):
-            self._smooth_cone_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
-        cone_surf = self._smooth_cone_surf
-        cone_surf.fill((0, 0, 0, 0))
+        coins_lbl = self.loc.get_text("ui_coins", "COINS")
+        coins_surf = self.font.render(f"{coins_lbl}:{self.coins_left}", True, COLOR_TEXT)
+        cx_pos = CANVAS_W // 2 - coins_surf.get_width() // 2
+        self.panel_surface.blit(coins_surf, (cx_pos, 5))
 
-        layers = [
-            (135, FLASHLIGHT_ANGLE * 0.55, 230),
-            (120, FLASHLIGHT_ANGLE * 0.80, 180),
-            (105, FLASHLIGHT_ANGLE * 1.05, 120),
-            (85, FLASHLIGHT_ANGLE * 1.25, 60),
-        ]
+        bar_x = CANVAS_W - 68
+        bar_w = 60
 
-        steps = 16
-        for length, angle_deg, alpha in layers:
-            half_a = math.radians(angle_deg / 2.0)
-            l_rad = angle_rad - half_a
-            r_rad = angle_rad + half_a
-            pts = [(px, py)]
-            for i in range(steps + 1):
-                a = l_rad + (r_rad - l_rad) * (i / steps)
-                pts.append((px + int(math.cos(a) * length), py + int(math.sin(a) * length)))
-            if len(pts) >= 3:
-                pygame.draw.polygon(cone_surf, (0, 0, 0, alpha), pts)
+        hp_txt = self.loc.get_text("ui_hp", "HP")
+        hp_label = self.font.render(hp_txt, True, COLOR_TEXT)
+        self.panel_surface.blit(hp_label, (bar_x - hp_label.get_width() - 3, 5))
+        pygame.draw.rect(self.panel_surface, (100, 20, 20), (bar_x, 5, bar_w, 8))
+        pygame.draw.rect(self.panel_surface, (250, 40, 40), (bar_x, 5, int(bar_w * max(0.0, self.player.health / 100.0)), 8))
+        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 5, bar_w, 8), 1)
 
-        return cone_surf
+        st_txt = self.loc.get_text("ui_st", "ST")
+        st_label = self.font.render(st_txt, True, COLOR_TEXT)
+        self.panel_surface.blit(st_label, (bar_x - st_label.get_width() - 3, 17))
+        pygame.draw.rect(self.panel_surface, (20, 80, 20), (bar_x, 17, bar_w, 8))
+        pygame.draw.rect(self.panel_surface, (40, 200, 40), (bar_x, 17, int(bar_w * max(0.0, self.player.stamina / 100.0)), 8))
+        pygame.draw.rect(self.panel_surface, PAL_OUTLINE, (bar_x, 17, bar_w, 8), 1)
 
-    def _build_cone_mask(
-        self,
-        view_w: int,
-        view_h: int,
-        px: int,
-        py: int,
-        angle_rad: float,
-        depth_ratio: float,
-        beam_length: int = 140,
-        beam_angle: float = FLASHLIGHT_ANGLE,
-    ) -> pygame.Surface:
-        """Build simple directional cone mask for train headlights or distant spotters."""
-        half_angle = math.radians(beam_angle / 2.0)
-        left_rad = angle_rad - half_angle
-        right_rad = angle_rad + half_angle
-
-        steps = 14
-        cone_pts = [(px, py)]
-        for i in range(steps + 1):
-            a = left_rad + (right_rad - left_rad) * (i / steps)
-            cone_pts.append((
-                px + int(math.cos(a) * beam_length),
-                py + int(math.sin(a) * beam_length),
-            ))
-
-        if not hasattr(self, "_cone_mask_surf") or self._cone_mask_surf.get_size() != (view_w, view_h):
-            self._cone_mask_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
-        cone_surf = self._cone_mask_surf
-        cone_surf.fill((0, 0, 0, 0))
-        if len(cone_pts) >= 3:
-            pygame.draw.polygon(cone_surf, (0, 0, 0, 180), cone_pts)
-        return cone_surf
-
-    def _render_diegetic_hud(self, surface: pygame.Surface) -> None:
-        """Draw diegetic HUD elements: canned food rations, coin counter, tool icon slot, and stamina arc."""
-        self._draw_health_icons(surface)
-        self._draw_ore_counter(surface)
-        self._draw_tool_slot(surface)
-        if self.player.stamina < 100.0:
-            self._draw_stamina_arc(surface)
-
-    def _draw_health_icons(self, surface: pygame.Surface) -> None:
-        """Render canned-food health icons in the top-left corner."""
-        icon_size = 8
-        spacing = 10
-        health_ratio = max(0.0, self.player.health / 100.0)
-        total_icons = 5
-        filled_icons = round(health_ratio * total_icons)
-        for i in range(total_icons):
-            x = 4 + i * spacing
-            y = 4
-            filled = i < filled_icons
-            body_col = (180, 60, 60) if filled else (70, 60, 60)
-            pygame.draw.rect(surface, PAL_OUTLINE, (x, y, icon_size, icon_size), border_radius=2)
-            pygame.draw.rect(surface, body_col, (x + 1, y + 1, icon_size - 2, icon_size - 2), border_radius=1)
-            if filled:
-                pygame.draw.rect(surface, (220, 90, 80), (x + 2, y + 2, 2, 2))
-            pygame.draw.rect(surface, PAL_OUTLINE, (x + 2, y - 1, 4, 2))
-            pygame.draw.rect(surface, (140, 140, 140), (x + 3, y - 1, 2, 1))
-
-    def _draw_ore_counter(self, surface: pygame.Surface) -> None:
-        """Render the score/coin counter in the top-right corner."""
-        score_text = f"x{self.score}"
-        ts = self.font.render(score_text, True, COLOR_GOLD)
-        coin_x = CANVAS_W - ts.get_width() - 14
-        coin_y = 4
-        pygame.draw.circle(surface, PAL_OUTLINE, (CANVAS_W - 8, coin_y + 4), 5)
-        pygame.draw.circle(surface, COLOR_GOLD, (CANVAS_W - 8, coin_y + 4), 4)
-        pygame.draw.circle(surface, (255, 240, 100), (CANVAS_W - 8, coin_y + 3), 2)
-        surface.blit(ts, (coin_x, coin_y))
-
-    def _draw_tool_slot(self, surface: pygame.Surface) -> None:
-        """Render 24x24 pixel-art tool icon in bottom-left corner with status indicator."""
-        am = AssetManager.get()
-        try:
-            icon_key = "rope" if self.player.using_rope else "pickaxe"
-            tool_icon = am.get_sprite("ui_icons", icon_key)
-            slot_x = 4
-            slot_y = CANVAS_H - 28
-            surface.blit(tool_icon, (slot_x, slot_y))
-
-            if self.player.using_rope:
-                status_txt = self.loc.get_text("hud_hook", "HOOK") if (self.player.hook and self.player.hook.attached) else f"x{self.player.ropes}"
-                ts = self.font.render(status_txt, True, (220, 240, 255))
-                surface.blit(ts, (slot_x + 28, slot_y + 6))
-            else:
-                ts = self.font.render("[Q]", True, (180, 190, 205))
-                surface.blit(ts, (slot_x + 28, slot_y + 6))
-        except Exception:
-            tool_name = self.loc.get_text("hud_rope", "[Rope]") if self.player.using_rope else self.loc.get_text("hud_pickaxe", "[Pickaxe]")
-            ts = self.font.render(tool_name, True, (220, 200, 160))
-            surface.blit(ts, (4, CANVAS_H - 18))
-
-    def _draw_stamina_arc(self, surface: pygame.Surface) -> None:
-        """Render a contextual arc stamina indicator beside the cat when stamina < 100%."""
-        interp_px, interp_py = self.player.get_interpolated_pos(self.render_alpha)
-        cam_x = int(self.camera.x)
-        cam_y = int(self.camera.y)
-        sx = int(interp_px - cam_x) + 14
-        sy = int(interp_py - cam_y)
-        radius = 7
-        ratio = max(0.0, min(1.0, self.player.stamina / 100.0))
-        start_angle = -math.pi / 2
-        steps = 16
-        bg_pts = []
-        fg_pts = []
-        for i in range(steps + 1):
-            a_bg = start_angle + (i / steps) * math.pi * 2
-            bg_pts.append((sx + int(math.cos(a_bg) * radius), sy + int(math.sin(a_bg) * radius)))
-        filled_steps = max(1, int(ratio * steps))
-        for i in range(filled_steps + 1):
-            a_fg = start_angle + (i / steps) * math.pi * 2
-            fg_pts.append((sx + int(math.cos(a_fg) * radius), sy + int(math.sin(a_fg) * radius)))
-        if len(bg_pts) >= 2:
-            pygame.draw.lines(surface, (40, 80, 40), False, bg_pts, 2)
-        if len(fg_pts) >= 2:
-            st_col = (80, 220, 80) if ratio > 0.3 else (220, 180, 40)
-            pygame.draw.lines(surface, st_col, False, fg_pts, 2)
+        surface.blit(self.panel_surface, (0, 0))

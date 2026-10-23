@@ -39,11 +39,11 @@ def _envelope(length: int, attack: int = 100, decay_frac: float = 1.0) -> np.nda
 
 def _make_pickaxe_clink() -> np.ndarray:
     """Synthesise a metallic high-pitched clink (440 Hz + 880 Hz, fast decay)."""
-    dur = 0.20
+    dur = 0.12
     n = int(_SAMPLE_RATE * dur)
     t = np.linspace(0, dur, n, endpoint=False)
     wave = np.sin(2 * np.pi * 440 * t) + 0.5 * np.sin(2 * np.pi * 880 * t)
-    env = np.exp(-t * 22)
+    env = np.exp(-t * 30)
     return _normalize_i16(wave * env)
 
 
@@ -60,19 +60,6 @@ def _make_dirt_crumble() -> np.ndarray:
     wave = brown * (1 + 0.3 * mod)
     env = np.exp(-t * 12)
     return _normalize_i16(wave * env)
-
-
-def _make_shale_crunch() -> np.ndarray:
-    """Synthesise dense rock fracturing and concrete splintering noise."""
-    dur = 0.22
-    n = int(_SAMPLE_RATE * dur)
-    rng = np.random.default_rng(99)
-    noise = rng.standard_normal(n)
-    t = np.linspace(0, dur, n, endpoint=False)
-    sub = np.sin(2 * np.pi * 110 * t) + 0.5 * np.sin(2 * np.pi * 170 * t)
-    wave = noise * 0.7 + sub * 0.5
-    env = np.exp(-t * 14)
-    return _normalize_i16(wave * env, peak=0.9)
 
 
 def _make_rope_whoosh() -> np.ndarray:
@@ -112,38 +99,6 @@ def _make_cat_hiss() -> np.ndarray:
     return _normalize_i16(wave * env)
 
 
-def _make_meow_talk() -> np.ndarray:
-    """Synthesise an expressive brief dialogue chirp for cat speech typewriter."""
-    dur = 0.08
-    n = int(_SAMPLE_RATE * dur)
-    t = np.linspace(0, 1, n)
-    freq = 750 + 350 * np.sin(np.pi * t)
-    phase = np.cumsum(2 * np.pi * freq / _SAMPLE_RATE)
-    wave = np.sin(phase) + 0.2 * np.sin(2 * phase)
-    env = np.sin(np.pi * t) ** 0.5
-    return _normalize_i16(wave * env, peak=0.9)
-
-
-def _make_train_brake() -> np.ndarray:
-    """Synthesise high-pressure steel wheel screeching against railway tracks."""
-    dur = 0.90
-    n = int(_SAMPLE_RATE * dur)
-    t = np.linspace(0, dur, n, endpoint=False)
-    rng = np.random.default_rng(55)
-    noise = rng.standard_normal(n)
-    freq1 = np.linspace(2400, 1600, n)
-    freq2 = np.linspace(3100, 2100, n)
-    p1 = np.cumsum(2 * np.pi * freq1 / _SAMPLE_RATE)
-    p2 = np.cumsum(2 * np.pi * freq2 / _SAMPLE_RATE)
-    metal = 0.6 * np.sin(p1) + 0.4 * np.sin(p2)
-    friction = metal * (1.0 + 0.3 * noise)
-    env_atk = np.linspace(0.2, 1.0, int(n * 0.1))
-    env_mid = np.ones(int(n * 0.6))
-    env_decay = np.linspace(1.0, 0.0, n - len(env_atk) - len(env_mid))
-    full_env = np.concatenate([env_atk, env_mid, env_decay])
-    return _normalize_i16(friction * full_env, peak=0.9)
-
-
 def _make_ui_click() -> np.ndarray:
     """Synthesise a short square-wave blip at 880 Hz (0.05 s, fast decay)."""
     dur = 0.05
@@ -165,11 +120,11 @@ def _make_screen_knock() -> np.ndarray:
 
 
 def _make_ambient_drone() -> np.ndarray:
-    """Synthesise a 4-second dark underground ambient loop (60/90/45 Hz + periodic LFO)."""
+    """Synthesise a 4-second dark underground ambient loop (60/90/45 Hz + LFO)."""
     dur = 4.0
     n = int(_SAMPLE_RATE * dur)
     t = np.linspace(0, dur, n, endpoint=False)
-    lfo = 0.5 + 0.5 * np.cos(2 * np.pi * 0.25 * t)
+    lfo = 0.5 + 0.5 * np.sin(2 * np.pi * 0.15 * t)
     wave = (
         np.sin(2 * np.pi * 60 * t)
         + 0.6 * np.sin(2 * np.pi * 90 * t) * lfo
@@ -182,7 +137,8 @@ class AudioManager:
     """Singleton manager that synthesises and plays retro SFX using numpy and pygame.
 
     All waveforms are generated at 44 100 Hz in int16 stereo format and stored as
-    pygame.Sound objects. When the pygame mixer is unavailable, all methods silently no-op.
+    :class:`pygame.Sound` objects.  When the pygame mixer is unavailable (e.g.
+    ``SDL_AUDIODRIVER=dummy``), all methods silently no-op.
     """
 
     _instance: Optional["AudioManager"] = None
@@ -192,8 +148,6 @@ class AudioManager:
         self._available: bool = False
         self._sounds: dict[str, object] = {}
         self._master_volume: float = 1.0
-        self._music_volume: float = 0.8
-        self._sfx_volume: float = 0.8
         self._ambient_channel: object = None
 
     @classmethod
@@ -207,7 +161,7 @@ class AudioManager:
         """Synthesise all SFX waveforms and start the ambient drone loop.
 
         Attempts to initialise the pygame mixer at 44 100 Hz / 16-bit / stereo.
-        If initialisation fails or SDL_AUDIODRIVER is dummy, the manager
+        If initialisation fails or ``SDL_AUDIODRIVER`` is ``dummy``, the manager
         marks itself unavailable and all subsequent calls become no-ops.
         """
         if os.environ.get("SDL_AUDIODRIVER") == "dummy":
@@ -224,12 +178,9 @@ class AudioManager:
         builders = {
             "pickaxe_clink": _make_pickaxe_clink,
             "dirt_crumble": _make_dirt_crumble,
-            "shale_crunch": _make_shale_crunch,
             "rope_whoosh": _make_rope_whoosh,
             "cat_meow": _make_cat_meow,
             "cat_hiss": _make_cat_hiss,
-            "meow_talk": _make_meow_talk,
-            "train_brake": _make_train_brake,
             "ui_click": _make_ui_click,
             "screen_knock": _make_screen_knock,
             "ambient_drone": _make_ambient_drone,
@@ -251,7 +202,7 @@ class AudioManager:
                 pass
 
     def play(self, sound_name: str, volume: float = 1.0) -> None:
-        """Play a named SFX at the given volume scaled by the master volume.
+        """Play a named SFX at the given *volume* scaled by the master volume.
 
         Args:
             sound_name: Key matching one of the synthesised sound names.
@@ -263,34 +214,10 @@ class AudioManager:
         if sound is None:
             return
         try:
-            sound.set_volume(volume * self._sfx_volume * self._master_volume)
+            sound.set_volume(volume * self._master_volume)
             sound.play()
         except Exception:
             pass
-
-    def play_meow_talk(self, volume: float = 1.0) -> None:
-        """Play short meow talk audio chirp at the given volume multiplier.
-
-        Args:
-            volume: Volume multiplier in [0.0, 1.0].
-        """
-        self.play("meow_talk", volume)
-
-    def play_shale_crunch(self, volume: float = 1.0) -> None:
-        """Play shale crunch sound effect at the given volume multiplier.
-
-        Args:
-            volume: Volume multiplier in [0.0, 1.0].
-        """
-        self.play("shale_crunch", volume)
-
-    def play_train_brake(self, volume: float = 1.0) -> None:
-        """Play train brake screech sound effect at the given volume multiplier.
-
-        Args:
-            volume: Volume multiplier in [0.0, 1.0].
-        """
-        self.play("train_brake", volume)
 
     def stop_ambient(self) -> None:
         """Stop the looping ambient drone channel, if it is playing."""
@@ -304,43 +231,13 @@ class AudioManager:
                 pass
 
     def set_master_volume(self, vol: float) -> None:
-        """Set the master volume applied to all subsequent play calls.
+        """Set the master volume applied to all subsequent :meth:`play` calls.
 
         Args:
             vol: New master volume in [0.0, 1.0].
         """
         self._master_volume = max(0.0, min(1.0, vol))
-        if self._ambient_channel is not None:
-            try:
-                self._ambient_channel.set_volume(self._music_volume * self._master_volume)
-            except Exception:
-                pass
-
-    def set_music_volume(self, vol: float) -> None:
-        """Set the music volume applied to ambient and background loops."""
-        self._music_volume = max(0.0, min(1.0, vol))
-        if self._ambient_channel is not None:
-            try:
-                self._ambient_channel.set_volume(self._music_volume * self._master_volume)
-            except Exception:
-                pass
-
-    def set_sfx_volume(self, vol: float) -> None:
-        """Set the SFX volume multiplier applied to sound effects."""
-        self._sfx_volume = max(0.0, min(1.0, vol))
-
-    def get_master_volume(self) -> float:
-        """Return current master volume."""
-        return self._master_volume
-
-    def get_music_volume(self) -> float:
-        """Return current music volume."""
-        return self._music_volume
-
-    def get_sfx_volume(self) -> float:
-        """Return current SFX volume."""
-        return self._sfx_volume
 
     def is_available(self) -> bool:
-        """Return True if the pygame mixer was successfully initialised."""
+        """Return *True* if the pygame mixer was successfully initialised."""
         return self._available

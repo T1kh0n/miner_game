@@ -35,9 +35,9 @@ class SkinState(State):
     def _refresh_strings(self) -> None:
         self.title_lbl.set_text(self.loc.get_text("skin_title", "SELECT EQUIPMENT"))
         self.btn_back.set_text(self.loc.get_text("btn_back", "BACK"))
-        self._update_label()
 
     def enter(self) -> None:
+        self._update_label()
         self._refresh_strings()
 
     def _prev(self) -> None:
@@ -50,7 +50,7 @@ class SkinState(State):
 
     def _update_label(self) -> None:
         selected = self.skin_keys[self.current_idx]
-        self.lbl_name.set_text(self.loc.get_text(f"skin_{selected}", selected.upper()))
+        self.lbl_name.set_text(selected.upper())
         self.manager.selected_skin = selected
 
     def handle_event(self, event: pygame.event.Event, mouse_pos: tuple[int, int]) -> None:
